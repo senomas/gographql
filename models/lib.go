@@ -1,16 +1,30 @@
 package models
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	"github.com/graphql-go/graphql"
 )
 
-func CreateFields(db *sql.DB, fns ...func(db *sql.DB, fields graphql.Fields) graphql.Fields) graphql.Fields {
+type ContextKey string
+
+func (c ContextKey) String() string {
+	return "github.com/senomas/gographql:" + string(c)
+}
+
+const ContextKeyDB = ContextKey("db")
+const ContextKeyCache = ContextKey("cache")
+
+func NewContext(sqlDB *sql.DB) context.Context {
+	return context.WithValue(context.WithValue(context.Background(), ContextKeyDB, sqlDB), ContextKeyCache, make(map[string]interface{}))
+}
+
+func CreateFields(fns ...func(fields graphql.Fields) graphql.Fields) graphql.Fields {
 	fields := graphql.Fields{}
 	for _, fn := range fns {
-		fields = fn(db, fields)
+		fields = fn(fields)
 	}
 	return fields
 }
