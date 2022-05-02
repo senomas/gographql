@@ -31,7 +31,17 @@ func main() {
 
 	query := `
 	{
-		hello
+		book(id: 2) {
+			id
+			title
+			author {
+				name
+			}
+			reviews {
+				star
+				body
+			}
+		}
 	}`
 	params := graphql.Params{Schema: schema, RequestString: query}
 
@@ -40,6 +50,6 @@ func main() {
 		log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
 	}
 
-	rJSON, _ := json.Marshal(r)
+	rJSON, _ := json.MarshalIndent(r, "", "  ")
 	fmt.Printf("%s\n", rJSON)
 }
