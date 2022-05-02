@@ -53,7 +53,22 @@ func BookQueries(db *sql.DB, fields graphql.Fields) graphql.Fields {
 		Type:        graphql.NewList(BookType),
 		Description: "Get list of book",
 		Args: graphql.FieldConfigArgument{
+			"query_limit": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+			"query_offset": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+			"id": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+			"title": &graphql.ArgumentConfig{
+				Type: graphql.String,
+			},
 			"title_like": &graphql.ArgumentConfig{
+				Type: graphql.String,
+			},
+			"author": &graphql.ArgumentConfig{
 				Type: graphql.String,
 			},
 			"author_like": &graphql.ArgumentConfig{
@@ -149,11 +164,24 @@ func BooksResolver(db *sql.DB) func(p graphql.ResolveParams) (interface{}, error
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		var params []interface{}
 		where := []string{}
+		if v, ok := p.Args["id"]; ok {
+			params = append(params, v)
+			where = append(where, fmt.Sprintf("b.id = $%v", len(params)))
+		}
+		if v, ok := p.Args["title"]; ok {
+			params = append(params, v)
+			where = append(where, fmt.Sprintf("b.title = $%v", len(params)))
+		}
 		if v, ok := p.Args["title_like"]; ok {
 			params = append(params, v)
 			where = append(where, fmt.Sprintf("b.title LIKE $%v", len(params)))
 		}
 		joinAuthor := false
+		if v, ok := p.Args["author"]; ok {
+			joinAuthor = true
+			params = append(params, v)
+			where = append(where, fmt.Sprintf("a.name = $%v", len(params)))
+		}
 		if v, ok := p.Args["author_like"]; ok {
 			joinAuthor = true
 			params = append(params, v)
@@ -173,6 +201,12 @@ func BooksResolver(db *sql.DB) func(p graphql.ResolveParams) (interface{}, error
 					}
 					q.WriteString(w)
 				}
+			}
+			if v, ok := p.Args["query_limit"]; ok {
+				q.WriteString(fmt.Sprintf(" LIMIT %v", v))
+			}
+			if v, ok := p.Args["query_offset"]; ok {
+				q.WriteString(fmt.Sprintf(" OFFSET %v", v))
 			}
 			query = q.String()
 			fields = fs

@@ -244,6 +244,126 @@ func TestBook(t *testing.T) {
 			assert.NoError(t, mock.ExpectationsWereMet())
 		})
 
+		t.Run("find limit books with author name", func(t *testing.T) {
+			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title, a.name FROM (books b LEFT JOIN authors a ON b.author_id = a.id) LIMIT 1`)).WithArgs([]driver.Value{}...).WillReturnRows(sqlmock.NewRows(
+				[]string{"id", "title", "author_name"}).
+				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling"))
+
+			query := `
+				{
+					books(query_limit: 1) {
+						id
+						title
+						author {
+							name
+						}
+					}
+				}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"books": [
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 1,
+				"title": "Harry Potter and the Philosopher's Stone"
+			}
+		]
+	}
+}`, string(rJSON))
+
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+
+		t.Run("find offset books with author name", func(t *testing.T) {
+			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title, a.name FROM (books b LEFT JOIN authors a ON b.author_id = a.id) OFFSET 1`)).WithArgs([]driver.Value{}...).WillReturnRows(sqlmock.NewRows(
+				[]string{"id", "title", "author_name"}).
+				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling"))
+
+			query := `
+				{
+					books(query_offset: 1) {
+						id
+						title
+						author {
+							name
+						}
+					}
+				}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"books": [
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 1,
+				"title": "Harry Potter and the Philosopher's Stone"
+			}
+		]
+	}
+}`, string(rJSON))
+
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+
+		t.Run("find limit offset books with author name", func(t *testing.T) {
+			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title, a.name FROM (books b LEFT JOIN authors a ON b.author_id = a.id) LIMIT 1 OFFSET 1`)).WithArgs([]driver.Value{}...).WillReturnRows(sqlmock.NewRows(
+				[]string{"id", "title", "author_name"}).
+				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling"))
+
+			query := `
+				{
+					books(query_limit: 1, query_offset: 1) {
+						id
+						title
+						author {
+							name
+						}
+					}
+				}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"books": [
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 1,
+				"title": "Harry Potter and the Philosopher's Stone"
+			}
+		]
+	}
+}`, string(rJSON))
+
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+
 		t.Run("find books with author name and reviews", func(t *testing.T) {
 			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title, a.name FROM (books b LEFT JOIN authors a ON b.author_id = a.id)`)).WithArgs([]driver.Value{}...).WillReturnRows(sqlmock.NewRows(
 				[]string{"id", "title", "author_name"}).

@@ -199,6 +199,32 @@ func TestBook_DB(t *testing.T) {
 }`, string(rJSON))
 		})
 
+		t.Run("create book Harry Potter and the Prisoner of Azkaban", func(t *testing.T) {
+			query := `
+			mutation {
+				createBook(title: "Harry Potter and the Prisoner of Azkaban", author: "J.K. Rowling") {
+					id
+					title
+				}
+			}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"createBook": {
+			"id": 3,
+			"title": "Harry Potter and the Prisoner of Azkaban"
+		}
+	}
+}`, string(rJSON))
+		})
+
 		t.Run("find book by id", func(t *testing.T) {
 			query := `
 			{
@@ -280,12 +306,128 @@ func TestBook_DB(t *testing.T) {
 					}
 				],
 				"title": "Harry Potter and the Chamber of Secrets"
+			},
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 3,
+				"reviews": [],
+				"title": "Harry Potter and the Prisoner of Azkaban"
 			}
 		]
 	}
 }`, string(rJSON))
 		})
 
+		t.Run("find limit books with author name", func(t *testing.T) {
+			query := `
+				{
+					books(query_limit: 1) {
+						id
+						title
+						author {
+							name
+						}
+					}
+				}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"books": [
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 1,
+				"title": "Harry Potter and the Philosopher's Stone"
+			}
+		]
+	}
+}`, string(rJSON))
+		})
+
+		t.Run("find offset books with author name", func(t *testing.T) {
+			query := `
+				{
+					books(query_offset: 1) {
+						id
+						title
+						author {
+							name
+						}
+					}
+				}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"books": [
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 2,
+				"title": "Harry Potter and the Chamber of Secrets"
+			},
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 3,
+				"title": "Harry Potter and the Prisoner of Azkaban"
+			}
+		]
+	}
+}`, string(rJSON))
+		})
+
+		t.Run("find limit offset books with author name", func(t *testing.T) {
+			query := `
+				{
+					books(query_limit: 1, query_offset: 1) {
+						id
+						title
+						author {
+							name
+						}
+					}
+				}`
+			params := graphql.Params{Schema: schema, RequestString: query}
+
+			r := graphql.Do(params)
+			if len(r.Errors) > 0 {
+				log.Fatalf("Failed to execute graphql operation, errors: %+v", r.Errors)
+			}
+
+			rJSON, _ := json.MarshalIndent(r, "", "\t")
+			assert.Equal(t, `{
+	"data": {
+		"books": [
+			{
+				"author": {
+					"name": "J.K. Rowling"
+				},
+				"id": 2,
+				"title": "Harry Potter and the Chamber of Secrets"
+			}
+		]
+	}
+}`, string(rJSON))
+		})
 	}
 }
 
