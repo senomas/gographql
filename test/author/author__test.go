@@ -17,6 +17,10 @@ import (
 )
 
 func TestAuthor_DB(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	dsn := "postgresql://demo:password@localhost/postgres?sslmode=disable&TimeZone=Asia/Jakarta"
 
 	if sqlDBDirect, err := sql.Open("postgres", dsn); err != nil {

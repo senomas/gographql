@@ -15,5 +15,5 @@ test:
 	go clean -testcache
 	go test ./... -v -failfast
 
-qtest:
-	go test ./test/book/... -v -failfast
+short:
+	go test ./test/... -v -failfast -short
