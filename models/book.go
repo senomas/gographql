@@ -145,7 +145,7 @@ func BookResolver(p graphql.ResolveParams) (interface{}, error) {
 
 func BooksResolver(p graphql.ResolveParams) (interface{}, error) {
 	db := p.Context.Value(ContextKeyDB).(*sql.DB)
-	cache := p.Context.Value(ContextKeyCache).(map[string]interface{})
+	cache := p.Info.RootValue.(map[string]interface{})
 	var params []interface{}
 	where := []string{}
 	if v, ok := p.Args["id"]; ok {

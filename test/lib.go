@@ -16,7 +16,12 @@ func QuoteMeta(r string) string {
 
 func GqlTest(t *testing.T, schema graphql.Schema, ctx context.Context) (func(query string, str string) *graphql.Result, func(query string, str string) *graphql.Result) {
 	return func(query string, str string) *graphql.Result {
-			params := graphql.Params{Schema: schema, RequestString: query, Context: ctx}
+			params := graphql.Params{
+				Schema:        schema,
+				RequestString: query,
+				RootObject:    make(map[string]interface{}),
+				Context:       ctx,
+			}
 			r := graphql.Do(params)
 
 			rJSON, _ := json.MarshalIndent(r, "", "\t")
@@ -29,7 +34,12 @@ func GqlTest(t *testing.T, schema graphql.Schema, ctx context.Context) (func(que
 
 			return r
 		}, func(query string, str string) *graphql.Result {
-			params := graphql.Params{Schema: schema, RequestString: query, Context: ctx}
+			params := graphql.Params{
+				Schema:        schema,
+				RequestString: query,
+				RootObject:    make(map[string]interface{}),
+				Context:       ctx,
+			}
 			r := graphql.Do(params)
 
 			assert.Equal(t, len(r.Errors), 1)

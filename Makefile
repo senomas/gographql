@@ -13,7 +13,7 @@ run:
 test:
 	docker-compose up -d postgres
 	go clean -testcache
-	go test ./... -v -failfast
+	go test ./... -p 1 -v -failfast
 
 short:
 	go test ./test/... -v -failfast -short

@@ -60,7 +60,7 @@ func ReviewMutations(fields graphql.Fields) graphql.Fields {
 
 func ReviewsResolver(p graphql.ResolveParams) (interface{}, error) {
 	db := p.Context.Value(ContextKeyDB).(*sql.DB)
-	cache := p.Context.Value(ContextKeyCache).(map[string]interface{})
+	cache := p.Info.RootValue.(map[string]interface{})
 
 	var query string
 	var fields []string
@@ -83,7 +83,10 @@ func ReviewsResolver(p graphql.ResolveParams) (interface{}, error) {
 		if v, ok := cache["reviews"]; ok {
 			reviewMap := *v.(*map[int]*[]Review)
 			reviews := reviewMap[book.ID]
-			return *reviews, nil
+			if reviews == nil {
+				return []Review{}, nil
+			}
+			return reviews, nil
 		}
 
 		if v, ok := cache["books"]; ok {
