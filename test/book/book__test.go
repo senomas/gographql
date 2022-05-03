@@ -49,7 +49,7 @@ func TestBook_DB(t *testing.T) {
 			schema = s
 		}
 
-		testQL, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, _ := test.QLTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create author J.K. Rowling", func(t *testing.T) {
 			testQL(`mutation {
