@@ -83,7 +83,7 @@ func BookQueries(fields graphql.Fields) graphql.Fields {
 				Type: graphql.String,
 			},
 		},
-		Resolve: BooksResolver,
+		Resolve: BookResolver,
 	}
 	return fields
 }
@@ -109,41 +109,6 @@ func BookMutations(fields graphql.Fields) graphql.Fields {
 }
 
 func BookResolver(p graphql.ResolveParams) (interface{}, error) {
-	db := p.Context.Value(ContextKey("db")).(*sql.DB)
-	var query string
-	var fields []string
-	if q, fs, err := GenerateBookQuery(p.Info.FieldASTs[0], false); err != nil {
-		return nil, err
-	} else {
-		q.WriteString(" WHERE b.id = $1")
-		query = q.String()
-		fields = fs
-	}
-
-	var params []interface{}
-	if id, ok := p.Args["id"].(int); ok {
-		params = append(params, id)
-	} else {
-		return nil, errors.New("parameter id required")
-	}
-	rows, err := db.Query(query, params...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var book Book
-		err := rows.Scan(BookPointer(fields, &book)...)
-		if err != nil {
-			return nil, err
-		}
-		return book, nil
-	}
-	return nil, nil
-}
-
-func BooksResolver(p graphql.ResolveParams) (interface{}, error) {
 	db := p.Context.Value(ContextKeyDB).(*sql.DB)
 	cache := p.Info.RootValue.(map[string]interface{})
 	var params []interface{}
@@ -186,8 +151,15 @@ func BooksResolver(p graphql.ResolveParams) (interface{}, error) {
 				q.WriteString(w)
 			}
 		}
-		if v, ok := p.Args["query_limit"]; ok {
-			q.WriteString(fmt.Sprintf(" LIMIT %v", v))
+		if p.Info.FieldName == "books" {
+			if v, ok := p.Args["query_limit"]; ok {
+				q.WriteString(fmt.Sprintf(" LIMIT %v", v))
+			}
+		} else {
+			if _, ok := p.Args["query_limit"]; ok {
+				return nil, errors.New("invalid parameter query_limit")
+			}
+			q.WriteString(" LIMIT 1")
 		}
 		if v, ok := p.Args["query_offset"]; ok {
 			q.WriteString(fmt.Sprintf(" OFFSET %v", v))
@@ -204,18 +176,27 @@ func BooksResolver(p graphql.ResolveParams) (interface{}, error) {
 	}
 	defer rows.Close()
 
-	var books []Book
 	var book Book
 	pbook := BookPointer(fields, &book)
-	for rows.Next() {
+	if p.Info.FieldName == "books" {
+		var books []Book
+		for rows.Next() {
+			err := rows.Scan(pbook...)
+			if err != nil {
+				return nil, err
+			}
+			books = append(books, book)
+		}
+		cache["books"] = &books
+		return books, nil
+	}
+	if rows.Next() {
 		err := rows.Scan(pbook...)
 		if err != nil {
 			return nil, err
 		}
-		books = append(books, book)
 	}
-	cache["books"] = &books
-	return books, nil
+	return book, nil
 }
 
 func CreateBookResolver(p graphql.ResolveParams) (interface{}, error) {
@@ -265,6 +246,7 @@ func CreateBookResolver(p graphql.ResolveParams) (interface{}, error) {
 				tx.Commit()
 			}
 
+			p.Args = make(map[string]interface{})
 			p.Args["id"] = id
 			return BookResolver(p)
 		}

@@ -38,6 +38,29 @@ var ReviewType = graphql.NewObject(
 	},
 )
 
+func ReviewQueries(fields graphql.Fields) graphql.Fields {
+	fields["reviews"] = &graphql.Field{
+		Type:        graphql.NewList(BookType),
+		Description: "Get list of reviews",
+		Args: graphql.FieldConfigArgument{
+			"query_limit": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+			"query_offset": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+			"id": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+			"star": &graphql.ArgumentConfig{
+				Type: graphql.Int,
+			},
+		},
+		Resolve: ReviewsResolver,
+	}
+	return fields
+}
+
 func ReviewMutations(fields graphql.Fields) graphql.Fields {
 	fields["createReview"] = &graphql.Field{
 		Type:        ReviewType,

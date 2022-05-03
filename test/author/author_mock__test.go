@@ -29,7 +29,7 @@ func TestAuthor(t *testing.T) {
 			schema = s
 		}
 
-		testQL, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, _ := test.QLTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create author", func(t *testing.T) {
 			mock.ExpectBegin()

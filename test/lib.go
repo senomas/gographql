@@ -14,7 +14,7 @@ func QuoteMeta(r string) string {
 	return "^" + regexp.QuoteMeta(r) + "$"
 }
 
-func GqlTest(t *testing.T, schema graphql.Schema, ctx context.Context) (func(query string, str string) *graphql.Result, func(query string, str string) *graphql.Result) {
+func QLTest(t *testing.T, schema graphql.Schema, ctx context.Context) (func(query string, str string) *graphql.Result, func(query string, str string) *graphql.Result) {
 	return func(query string, str string) *graphql.Result {
 			params := graphql.Params{
 				Schema:        schema,

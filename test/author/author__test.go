@@ -48,7 +48,7 @@ func TestAuthor_DB(t *testing.T) {
 			schema = s
 		}
 
-		testQL, testQLFailed := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, testQLFailed := test.QLTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create author", func(t *testing.T) {
 			testQL(`mutation {

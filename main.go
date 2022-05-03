@@ -9,8 +9,6 @@ import (
 )
 
 func main() {
-	fmt.Println("GraphQL Tutorial")
-
 	fields := graphql.Fields{
 		"hello": &graphql.Field{
 			Type: graphql.String,
