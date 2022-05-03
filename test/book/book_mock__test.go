@@ -29,7 +29,7 @@ func TestBook(t *testing.T) {
 			schema = s
 		}
 
-		eval, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create book with author_id", func(t *testing.T) {
 			mock.ExpectBegin()
@@ -41,7 +41,7 @@ func TestBook(t *testing.T) {
 				[]string{"id", "title"}).
 				AddRow(1, "Harry Potter and the Philosopher's Stone"))
 
-			eval(`mutation {
+			testQL(`mutation {
 				createBook(title: "Harry Potter and the Philosopher's Stone", author_id: 1) {
 					id
 					title
@@ -63,7 +63,7 @@ func TestBook(t *testing.T) {
 				[]string{"id", "title"}).
 				AddRow(2, "Harry Potter and the Chamber of Secrets"))
 
-			eval(`{
+			testQL(`{
 				book(id: 2) {
 					id
 					title
@@ -85,7 +85,7 @@ func TestBook(t *testing.T) {
 				[]string{"id", "title", "author_name"}).
 				AddRow(2, "Harry Potter and the Chamber of Secrets", "J.K. Rowling"))
 
-			eval(`{
+			testQL(`{
 				book(id: 2) {
 					id
 					title
@@ -118,7 +118,7 @@ func TestBook(t *testing.T) {
 				AddRow(2, 5, "The Boy Who Lived").
 				AddRow(2, 4, "The stone that must be destroyed"))
 
-			eval(`{
+			testQL(`{
 				book(id: 2) {
 					id
 					title
@@ -166,7 +166,7 @@ func TestBook(t *testing.T) {
 				AddRow(6, "Harry Potter and the Half-Blood Prince", "J.K. Rowling").
 				AddRow(7, "Harry Potter and the Deathly Hallows", "J.K. Rowling"))
 
-			eval(`{
+			testQL(`{
 				books {
 					id
 					title
@@ -238,7 +238,7 @@ func TestBook(t *testing.T) {
 				[]string{"id", "title", "author_name"}).
 				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling"))
 
-			eval(`{
+			testQL(`{
 				books(query_limit: 1) {
 					id
 					title
@@ -268,7 +268,7 @@ func TestBook(t *testing.T) {
 				[]string{"id", "title", "author_name"}).
 				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling"))
 
-			eval(`{
+			testQL(`{
 				books(query_offset: 1) {
 					id
 					title
@@ -298,7 +298,7 @@ func TestBook(t *testing.T) {
 				[]string{"id", "title", "author_name"}).
 				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling"))
 
-			eval(`{
+			testQL(`{
 				books(query_limit: 1, query_offset: 1) {
 					id
 					title
@@ -329,13 +329,77 @@ func TestBook(t *testing.T) {
 				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling").
 				AddRow(2, "Harry Potter and the Chamber of Secrets", "J.K. Rowling"))
 
+			mock.ExpectQuery(test.QuoteMeta(`SELECT r.book_id, r.star, r.body FROM reviews r WHERE r.book_id = ANY($1)`)).WithArgs("{1,2}").WillReturnRows(sqlmock.NewRows(
+				[]string{"book_id", "star", "body"}).
+				AddRow(1, 5, "The Boy Who Lived").
+				AddRow(1, 4, "The stone that must be destroyed").
+				AddRow(2, 5, "The Girl Who Kill"))
+
+			testQL(`{
+				books {
+					id
+					title
+					author {
+						name
+					}
+					reviews {
+						star
+						body
+					}
+				}
+			}`, `{
+				"data": {
+					"books": [
+						{
+							"author": {
+								"name": "J.K. Rowling"
+							},
+							"id": 1,
+							"reviews": [
+								{
+									"body": "The Boy Who Lived",
+									"star": 5
+								},
+								{
+									"body": "The stone that must be destroyed",
+									"star": 4
+								}
+							],
+							"title": "Harry Potter and the Philosopher's Stone"
+						},
+						{
+							"author": {
+								"name": "J.K. Rowling"
+							},
+							"id": 2,
+							"reviews": [
+								{
+									"body": "The Girl Who Kill",
+									"star": 5
+								}
+							],
+							"title": "Harry Potter and the Chamber of Secrets"
+						}
+					]
+				}
+			}`)
+
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+
+		t.Run("find books with author name and reviews limit", func(t *testing.T) {
+			mock.ExpectQuery(test.QuoteMeta(`SELECT b.id, b.title, a.name FROM (books b LEFT JOIN authors a ON b.author_id = a.id)`)).WithArgs([]driver.Value{}...).WillReturnRows(sqlmock.NewRows(
+				[]string{"id", "title", "author_name"}).
+				AddRow(1, "Harry Potter and the Philosopher's Stone", "J.K. Rowling").
+				AddRow(2, "Harry Potter and the Chamber of Secrets", "J.K. Rowling"))
+
 			mock.ExpectQuery(test.QuoteMeta(`SELECT r.book_id, r.star, r.body FROM reviews r WHERE r.book_id = ANY($1) LIMIT 10`)).WithArgs("{1,2}").WillReturnRows(sqlmock.NewRows(
 				[]string{"book_id", "star", "body"}).
 				AddRow(1, 5, "The Boy Who Lived").
 				AddRow(1, 4, "The stone that must be destroyed").
 				AddRow(2, 5, "The Girl Who Kill"))
 
-			eval(`{
+			testQL(`{
 				books {
 					id
 					title
@@ -393,7 +457,7 @@ func TestBook(t *testing.T) {
 				AddRow(1, "Harry Potter and the Philosopher's Stone").
 				AddRow(2, "Harry Potter and the Chamber of Secrets"))
 
-			eval(`{
+			testQL(`{
 				books(title_like: "Harry Potter %") {
 					id
 					title
@@ -420,7 +484,7 @@ func TestBook(t *testing.T) {
 				AddRow(1, "Harry Potter and the Philosopher's Stone").
 				AddRow(2, "Harry Potter and the Chamber of Secrets"))
 
-			eval(`{
+			testQL(`{
 				books(author_like: "%Rowling") {
 					id
 					title
@@ -447,7 +511,7 @@ func TestBook(t *testing.T) {
 				AddRow(1, "Harry Potter and the Philosopher's Stone").
 				AddRow(2, "Harry Potter and the Chamber of Secrets"))
 
-			eval(`{
+			testQL(`{
 				books(title_like: "Harry Potter %", author_like: "%Rowling") {
 					id
 					title

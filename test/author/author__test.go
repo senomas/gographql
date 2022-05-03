@@ -48,10 +48,10 @@ func TestAuthor_DB(t *testing.T) {
 			schema = s
 		}
 
-		eval, evalFailed := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, testQLFailed := test.GqlTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create author", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createAuthor(name: "Lord Voldemort") {
 					id
 					name
@@ -67,7 +67,7 @@ func TestAuthor_DB(t *testing.T) {
 		})
 
 		t.Run("update author", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				updateAuthor(id: 1, name: "J.K. Rowling") {
 					name
 				}
@@ -81,7 +81,7 @@ func TestAuthor_DB(t *testing.T) {
 		})
 
 		t.Run("update author not found", func(t *testing.T) {
-			evalFailed(`mutation {
+			testQLFailed(`mutation {
 				updateAuthor(id: 9999, name: "J.K. Rowling") {
 					name
 				}

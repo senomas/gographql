@@ -29,7 +29,7 @@ func TestAuthor(t *testing.T) {
 			schema = s
 		}
 
-		eval, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create author", func(t *testing.T) {
 			mock.ExpectBegin()
@@ -41,7 +41,7 @@ func TestAuthor(t *testing.T) {
 				[]string{"id", "name"}).
 				AddRow(1, "Lord Voldemort"))
 
-			eval(`mutation {
+			testQL(`mutation {
 				createAuthor(name: "Lord Voldemort") {
 					id
 					name
@@ -66,7 +66,7 @@ func TestAuthor(t *testing.T) {
 				[]string{"id", "name"}).
 				AddRow(1, "J.K. Rowling"))
 
-			eval(`mutation {
+			testQL(`mutation {
 				updateAuthor(id: 1, name: "J.K. Rowling") {
 					name
 				}

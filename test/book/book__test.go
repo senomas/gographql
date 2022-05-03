@@ -49,10 +49,10 @@ func TestBook_DB(t *testing.T) {
 			schema = s
 		}
 
-		eval, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
+		testQL, _ := test.GqlTest(t, schema, models.NewContext(sqlDB))
 
 		t.Run("create author J.K. Rowling", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createAuthor(name: "J.K. Rowling") {
 					id
 					name
@@ -68,7 +68,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("create book Harry Potter and the Philosopher's Stone", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createBook(title: "Harry Potter and the Philosopher's Stone", author: "J.K. Rowling") {
 					id
 					title
@@ -84,7 +84,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("create book Harry Potter and the Philosopher's Stone Review 1", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createReview(book_id: 1, star: 5, body: "The Boy Who Lived") {
 					id
 				}
@@ -98,7 +98,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("create book Harry Potter and the Philosopher's Stone Review 2", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createReview(book_id: 1, star: 4, body: "The stone that must be destroyed") {
 					id
 				}
@@ -112,7 +112,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("create book Harry Potter and the Chamber of Secrets", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createBook(title: "Harry Potter and the Chamber of Secrets", author: "J.K. Rowling") {
 					id
 					title
@@ -128,7 +128,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("create book Harry Potter and the Chamber of Secrets Review 1", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createReview(book_id: 2, star: 5, body: "The Girl Who Kill") {
 					id
 					book_id
@@ -144,7 +144,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("create book Harry Potter and the Prisoner of Azkaban", func(t *testing.T) {
-			eval(`mutation {
+			testQL(`mutation {
 				createBook(title: "Harry Potter and the Prisoner of Azkaban", author: "J.K. Rowling") {
 					id
 					title
@@ -160,7 +160,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("find book by id", func(t *testing.T) {
-			eval(`{
+			testQL(`{
 				book(id: 2) {
 					id
 					title
@@ -176,7 +176,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("find books with author name and reviews", func(t *testing.T) {
-			eval(`{
+			testQL(`{
 				books {
 					id
 					title
@@ -235,7 +235,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("find limit books with author name", func(t *testing.T) {
-			eval(`{
+			testQL(`{
 				books(query_limit: 1) {
 					id
 					title
@@ -259,7 +259,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("find offset books with author name", func(t *testing.T) {
-			eval(`{
+			testQL(`{
 				books(query_offset: 1) {
 					id
 					title
@@ -290,7 +290,7 @@ func TestBook_DB(t *testing.T) {
 		})
 
 		t.Run("find limit offset books with author name", func(t *testing.T) {
-			eval(`{
+			testQL(`{
 				books(query_limit: 1, query_offset: 1) {
 					id
 					title
