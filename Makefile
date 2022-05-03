@@ -16,4 +16,4 @@ test:
 	go test ./... -p 1 -v -failfast
 
 short:
-	go test ./test/... -v -failfast -short
+	go test ./... -v -failfast -short

@@ -1,4 +1,4 @@
-package test_book
+package models
 
 import (
 	"database/sql"
@@ -7,15 +7,12 @@ import (
 	"testing"
 
 	"github.com/graphql-go/graphql"
-	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
-	"github.com/senomas/gographql/models"
-	"github.com/senomas/gographql/test"
 	sqldblogger "github.com/simukti/sqldb-logger"
 	"github.com/simukti/sqldb-logger/logadapter/zerologadapter"
 )
 
-func TestBook_DB(t *testing.T) {
+func Test_DB(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -34,13 +31,13 @@ func TestBook_DB(t *testing.T) {
 			log.Fatalf("Failed to ping database, err %v", err)
 		}
 
-		if err := models.SetupDevDatabase(sqlDB); err != nil {
+		if err := SetupDevDatabase(sqlDB); err != nil {
 			log.Fatalf("Failed to setupDatabase, err %v", err)
 		}
 
 		schemaConfig := graphql.SchemaConfig{
-			Query:    graphql.NewObject(graphql.ObjectConfig{Name: "RootQuery", Fields: models.BookQueries(graphql.Fields{})}),
-			Mutation: graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: models.AuthorMutations(models.ReviewMutations(models.BookMutations(graphql.Fields{})))}),
+			Query:    graphql.NewObject(graphql.ObjectConfig{Name: "RootQuery", Fields: CreateFields(BookQueries)}),
+			Mutation: graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: CreateFields(AuthorMutations, ReviewMutations, BookMutations)}),
 		}
 		var schema graphql.Schema
 		if s, err := graphql.NewSchema(schemaConfig); err != nil {
@@ -49,11 +46,11 @@ func TestBook_DB(t *testing.T) {
 			schema = s
 		}
 
-		testQL, _ := test.QLTest(t, schema, models.NewContext(sqlDB))
+		testQL, testQLFailed := QLTest(t, schema, NewContext(sqlDB))
 
-		t.Run("create author J.K. Rowling", func(t *testing.T) {
+		t.Run("create author", func(t *testing.T) {
 			testQL(`mutation {
-				createAuthor(name: "J.K. Rowling") {
+				createAuthor(name: "Lord Voldemort") {
 					id
 					name
 				}
@@ -61,10 +58,32 @@ func TestBook_DB(t *testing.T) {
 				"data": {
 					"createAuthor": {
 						"id": 1,
+						"name": "Lord Voldemort"
+					}
+				}
+			}`)
+		})
+
+		t.Run("update author", func(t *testing.T) {
+			testQL(`mutation {
+				updateAuthor(id: 1, name: "J.K. Rowling") {
+					name
+				}
+			}`, `{
+				"data": {
+					"updateAuthor": {
 						"name": "J.K. Rowling"
 					}
 				}
 			}`)
+		})
+
+		t.Run("update author not found", func(t *testing.T) {
+			testQLFailed(`mutation {
+				updateAuthor(id: 9999, name: "J.K. Rowling") {
+					name
+				}
+			}`, "affected rows 0")
 		})
 
 		t.Run("create book Harry Potter and the Philosopher's Stone", func(t *testing.T) {
