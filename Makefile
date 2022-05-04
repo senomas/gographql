@@ -17,3 +17,6 @@ test:
 
 short:
 	go test ./... -v -failfast -short
+
+dummy:
+	go test ./db -v -failfast

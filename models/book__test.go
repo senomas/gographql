@@ -1,7 +1,6 @@
 package models
 
 import (
-	"database/sql/driver"
 	"log"
 	"testing"
 
@@ -29,54 +28,125 @@ func TestBook(t *testing.T) {
 
 		testQL, _ := QLTest(t, schema, NewContext(sqlDB))
 
-		t.Run("create book with author_id", func(t *testing.T) {
-			mock.ExpectBegin()
-			mock.ExpectQuery(QuoteMeta(`INSERT INTO books (author_id, title) VALUES ($1, $2) RETURNING id`)).WithArgs(1, "Harry Potter and the Philosopher's Stone").WillReturnRows(sqlmock.NewRows(
-				[]string{"id"}).
-				AddRow(1))
-			mock.ExpectCommit()
-			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title FROM books b WHERE b.id = $1 LIMIT 1`)).WithArgs(1).WillReturnRows(sqlmock.NewRows(
+		// t.Run("find book by id", func(t *testing.T) {
+		// 	mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title FROM books b WHERE b.id = $1`)).WithArgs(2).WillReturnRows(sqlmock.NewRows(
+		// 		[]string{"id", "title"}).
+		// 		AddRow(2, "Harry Potter and the Chamber of Secrets"))
+
+		// 	testQL(`{
+		// 		book(id: 2) {
+		// 			id
+		// 			title
+		// 		}
+		// 	}`, `{
+		// 		"data": {
+		// 			"book": {
+		// 				"id": 2,
+		// 				"title": "Harry Potter and the Chamber of Secrets"
+		// 			}
+		// 		}
+		// 	}`)
+
+		// 	assert.NoError(t, mock.ExpectationsWereMet())
+		// })
+
+		// t.Run("find book and reviews by id", func(t *testing.T) {
+		// 	mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title FROM books b WHERE b.id = $1`)).WithArgs(2).WillReturnRows(sqlmock.NewRows(
+		// 		[]string{"id", "title"}).
+		// 		AddRow(2, "Harry Potter and the Chamber of Secrets"))
+
+		// 	mock.ExpectQuery(QuoteMeta(`SELECT r.id, r.book_id, r.star, r.body FROM reviews r WHERE r.book_id = $1`)).WithArgs(2).WillReturnRows(sqlmock.NewRows(
+		// 		[]string{"id", "book_id", "star", "body"}).
+		// 		AddRow(1, 1, 5, "The boy who live").
+		// 		AddRow(2, 1, 5, "The man who smelt garlic"))
+
+		// 	testQL(`{
+		// 		book(id: 2) {
+		// 			id
+		// 			title
+		// 			reviews(query_limit: 10) {
+		// 				star
+		// 				body
+		// 			}
+		// 		}
+		// 	}`, `{
+		// 		"data": {
+		// 			"book": {
+		// 				"id": 2,
+		// 				"title": "Harry Potter and the Chamber of Secrets",
+		// 				"reviews": [
+		// 					{
+		// 									"body": "The boy who live",
+		// 									"star": 5
+		// 					},
+		// 					{
+		// 									"body": "The man who smelt garlic",
+		// 									"star": 5
+		// 					}
+		// 				]
+		// 			}
+		// 		}
+		// 	}`)
+
+		// 	assert.NoError(t, mock.ExpectationsWereMet())
+		// })
+
+		t.Run("find books and reviews by id", func(t *testing.T) {
+			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title FROM books b`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows(
 				[]string{"id", "title"}).
-				AddRow(1, "Harry Potter and the Philosopher's Stone"))
-
-			testQL(`mutation {
-				createBook(title: "Harry Potter and the Philosopher's Stone", author_id: 1) {
-					id
-					title
-				}
-			}`, `{
-				"data": {
-					"createBook": {
-						"id": 1,
-						"title": "Harry Potter and the Philosopher's Stone"
-					}
-				}
-			}`)
-
-			assert.NoError(t, mock.ExpectationsWereMet())
-		})
-
-		t.Run("find books by id", func(t *testing.T) {
-			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title FROM books b WHERE b.id = $1 LIMIT 1`)).WithArgs(2).WillReturnRows(sqlmock.NewRows(
-				[]string{"id", "title"}).
+				AddRow(1, "Harry Potter and the Philosopher's Stone").
 				AddRow(2, "Harry Potter and the Chamber of Secrets"))
 
+			mock.ExpectQuery(QuoteMeta(`SELECT r.id, r.book_id, r.star, r.body FROM reviews r WHERE r.book_id = ANY($1)`)).WithArgs("{2,1}").WillReturnRows(sqlmock.NewRows(
+				[]string{"id", "book_id", "star", "body"}).
+				AddRow(1, 1, 5, "The boy who live").
+				AddRow(2, 1, 5, "The man who smelt garlic").
+				AddRow(3, 2, 5, "The girl who kill"))
+
 			testQL(`{
-				book(id: 2) {
+				books {
 					id
 					title
+					reviews(query_limit: 10) {
+						star
+						body
+					}
 				}
 			}`, `{
 				"data": {
-					"book": {
-						"id": 2,
-						"title": "Harry Potter and the Chamber of Secrets"
-					}
+					"books": [
+						{
+							"id": 1,
+							"title": "Harry Potter and the Philosopher's Stone",
+							"reviews": [
+								{
+												"body": "The boy who live",
+												"star": 5
+								},
+								{
+												"body": "The man who smelt garlic",
+												"star": 5
+								}
+							]
+						},
+						{
+							"id": 2,
+							"title": "Harry Potter and the Chamber of Secrets",
+							"reviews": [
+								{
+												"body": "The girl who kill",
+												"star": 5
+								}
+							]
+						}
+					]
 				}
 			}`)
 
 			assert.NoError(t, mock.ExpectationsWereMet())
 		})
+
+		/**
 
 		t.Run("find book with author name by id", func(t *testing.T) {
 			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title, a.name FROM (books b LEFT JOIN authors a ON b.author_id = a.id) WHERE b.id = $1 LIMIT 1`)).WithArgs(2).WillReturnRows(sqlmock.NewRows(
@@ -513,7 +583,7 @@ func TestBook(t *testing.T) {
 				books(title_like: "Harry Potter %", author_like: "%Rowling") {
 					id
 					title
-				}  
+				}
 			}`, `{
 				"data": {
 					"books": [
@@ -529,5 +599,34 @@ func TestBook(t *testing.T) {
 				}
 			}`)
 		})
+
+		t.Run("create book with author_id", func(t *testing.T) {
+			mock.ExpectBegin()
+			mock.ExpectQuery(QuoteMeta(`INSERT INTO books (author_id, title) VALUES ($1, $2) RETURNING id`)).WithArgs(1, "Harry Potter and the Philosopher's Stone").WillReturnRows(sqlmock.NewRows(
+				[]string{"id"}).
+				AddRow(1))
+			mock.ExpectCommit()
+			mock.ExpectQuery(QuoteMeta(`SELECT b.id, b.title FROM books b WHERE b.id = $1 LIMIT 1`)).WithArgs(1).WillReturnRows(sqlmock.NewRows(
+				[]string{"id", "title"}).
+				AddRow(1, "Harry Potter and the Philosopher's Stone"))
+
+			testQL(`mutation {
+				createBook(title: "Harry Potter and the Philosopher's Stone", author_id: 1) {
+					id
+					title
+				}
+			}`, `{
+				"data": {
+					"createBook": {
+						"id": 1,
+						"title": "Harry Potter and the Philosopher's Stone"
+					}
+				}
+			}`)
+
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+
+		**/
 	}
 }

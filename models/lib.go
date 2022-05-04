@@ -3,12 +3,14 @@ package models
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"testing"
 
 	"github.com/graphql-go/graphql"
+	"github.com/senomas/gographql/data"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,9 +21,13 @@ func (c ContextKey) String() string {
 }
 
 const ContextKeyDB = ContextKey("db")
+const ContextKeyLoader = ContextKey("loader")
+
+var NoArgs = []driver.Value{}
 
 func NewContext(sqlDB *sql.DB) context.Context {
-	return context.WithValue(context.Background(), ContextKeyDB, sqlDB)
+	loader := data.NewLoader(sqlDB)
+	return context.WithValue(context.WithValue(context.Background(), ContextKeyDB, sqlDB), ContextKeyLoader, loader)
 }
 
 func CreateFields(fns ...func(fields graphql.Fields) graphql.Fields) graphql.Fields {

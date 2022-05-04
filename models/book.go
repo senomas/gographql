@@ -8,14 +8,8 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/ast"
+	"github.com/senomas/gographql/data"
 )
-
-type Book struct {
-	ID      int
-	Title   string
-	Author  Author
-	Reviews []Review
-}
 
 var BookType = graphql.NewObject(
 	graphql.ObjectConfig{
@@ -109,94 +103,22 @@ func BookMutations(fields graphql.Fields) graphql.Fields {
 }
 
 func BookResolver(p graphql.ResolveParams) (interface{}, error) {
-	db := p.Context.Value(ContextKeyDB).(*sql.DB)
-	cache := p.Info.RootValue.(map[string]interface{})
-	var params []interface{}
-	where := []string{}
-	if v, ok := p.Args["id"]; ok {
-		params = append(params, v)
-		where = append(where, fmt.Sprintf("b.id = $%v", len(params)))
+	type result struct {
+		data interface{}
+		err  error
 	}
-	if v, ok := p.Args["title"]; ok {
-		params = append(params, v)
-		where = append(where, fmt.Sprintf("b.title = $%v", len(params)))
-	}
-	if v, ok := p.Args["title_like"]; ok {
-		params = append(params, v)
-		where = append(where, fmt.Sprintf("b.title LIKE $%v", len(params)))
-	}
-	joinAuthor := false
-	if v, ok := p.Args["author"]; ok {
-		joinAuthor = true
-		params = append(params, v)
-		where = append(where, fmt.Sprintf("a.name = $%v", len(params)))
-	}
-	if v, ok := p.Args["author_like"]; ok {
-		joinAuthor = true
-		params = append(params, v)
-		where = append(where, fmt.Sprintf("a.name LIKE $%v", len(params)))
-	}
+	ch := make(chan *result, 1)
+	go func() {
+		defer close(ch)
+		loader := p.Context.Value(ContextKeyLoader).(*data.Loader)
 
-	var query string
-	var fields []string
-	if q, fs, err := GenerateBookQuery(p.Info.FieldASTs[0], joinAuthor); err != nil {
-		return nil, err
-	} else {
-		if len(where) > 0 {
-			q.WriteString(" WHERE ")
-			for i, w := range where {
-				if i > 0 {
-					q.WriteString(" AND ")
-				}
-				q.WriteString(w)
-			}
-		}
-		if p.Info.FieldName == "books" {
-			if v, ok := p.Args["query_limit"]; ok {
-				q.WriteString(fmt.Sprintf(" LIMIT %v", v))
-			}
-		} else {
-			if _, ok := p.Args["query_limit"]; ok {
-				return nil, errors.New("invalid parameter query_limit")
-			}
-			q.WriteString(" LIMIT 1")
-		}
-		if v, ok := p.Args["query_offset"]; ok {
-			q.WriteString(fmt.Sprintf(" OFFSET %v", v))
-		}
-		query = q.String()
-		fields = fs
-	}
-
-	var rows *sql.Rows
-	if v, err := db.Query(query, params...); err != nil {
-		return nil, err
-	} else {
-		rows = v
-	}
-	defer rows.Close()
-
-	var book Book
-	pbook := BookPointer(fields, &book)
-	if p.Info.FieldName == "books" {
-		var books []Book
-		for rows.Next() {
-			err := rows.Scan(pbook...)
-			if err != nil {
-				return nil, err
-			}
-			books = append(books, book)
-		}
-		cache["books"] = &books
-		return books, nil
-	}
-	if rows.Next() {
-		err := rows.Scan(pbook...)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return book, nil
+		data, err := loader.LoadBooks(p.Context, p)
+		ch <- &result{data: data, err: err}
+	}()
+	return func() (interface{}, error) {
+		r := <-ch
+		return r.data, r.err
+	}, nil
 }
 
 func CreateBookResolver(p graphql.ResolveParams) (interface{}, error) {
@@ -293,7 +215,7 @@ func GenerateBookQuery(f ast.Selection, joinAuthor bool) (*strings.Builder, []st
 	return &query, fields, nil
 }
 
-func BookPointer(fields []string, book *Book) []interface{} {
+func BookPointer(fields []string, book *data.Book) []interface{} {
 	pointer := make([]interface{}, len(fields))
 	for i, f := range fields {
 		switch f {

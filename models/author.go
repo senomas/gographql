@@ -6,12 +6,8 @@ import (
 	"fmt"
 
 	"github.com/graphql-go/graphql"
+	"github.com/senomas/gographql/data"
 )
-
-type Author struct {
-	ID   int
-	Name string
-}
 
 var AuthorType = graphql.NewObject(
 	graphql.ObjectConfig{
@@ -83,7 +79,7 @@ func CreateAuthorResolver(p graphql.ResolveParams) (interface{}, error) {
 				return nil, err
 			} else {
 				if rows.Next() {
-					var author Author
+					var author data.Author
 					rows.Scan(&author.ID, &author.Name)
 
 					return author, nil
@@ -122,7 +118,7 @@ func UpdateAuthorResolver(p graphql.ResolveParams) (interface{}, error) {
 					return nil, err
 				} else {
 					if rows.Next() {
-						var author Author
+						var author data.Author
 						rows.Scan(&author.ID, &author.Name)
 
 						return author, nil
