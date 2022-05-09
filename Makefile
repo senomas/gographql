@@ -10,6 +10,10 @@ build:
 run:
 	GIN_MODE=release go run main.go
 
+clean:
+	go clean
+	go clean -testcache
+
 test:
 	docker-compose up -d postgres
 	go clean -testcache
