@@ -1,6 +1,6 @@
 package data
 
 type Author struct {
-	ID   int
-	Name string
+	ID   int    `gorm:"primaryKey"`
+	Name string ``
 }

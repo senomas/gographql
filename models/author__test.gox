@@ -2,11 +2,9 @@ package models
 
 import (
 	"database/sql/driver"
-	"log"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/graphql-go/graphql"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,18 +14,9 @@ func TestAuthor(t *testing.T) {
 	} else {
 		defer sqlDB.Close()
 
-		schemaConfig := graphql.SchemaConfig{
-			Query:    graphql.NewObject(graphql.ObjectConfig{Name: "RootQuery", Fields: CreateFields(BookQueries)}),
-			Mutation: graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: CreateFields(AuthorMutations, ReviewMutations, BookMutations)}),
-		}
-		var schema graphql.Schema
-		if s, err := graphql.NewSchema(schemaConfig); err != nil {
-			log.Fatalf("Failed to create new GraphQL Schema, err %v", err)
-		} else {
-			schema = s
-		}
+		schema, ctx := SetupGorm(t, mock, sqlDB)
 
-		testQL, _ := QLTest(t, schema, NewContext(sqlDB))
+		testQL, _ := QLTest(t, schema, ctx)
 
 		t.Run("create author", func(t *testing.T) {
 			mock.ExpectBegin()

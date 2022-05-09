@@ -6,12 +6,16 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/graphql-go/graphql"
 	"github.com/senomas/gographql/data"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type ContextKey string
@@ -26,8 +30,14 @@ const ContextKeyLoader = ContextKey("loader")
 var NoArgs = []driver.Value{}
 
 func NewContext(sqlDB *sql.DB) context.Context {
-	loader := data.NewLoader(sqlDB)
-	return context.WithValue(context.WithValue(context.Background(), ContextKeyDB, sqlDB), ContextKeyLoader, loader)
+	if db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{}); err != nil {
+		fmt.Printf("database error, %v\n", err)
+	} else {
+		loader := data.NewLoader(sqlDB)
+		return context.WithValue(context.WithValue(context.Background(), ContextKeyDB, db), ContextKeyLoader,
+			loader)
+	}
+	return context.Background()
 }
 
 func CreateFields(fns ...func(fields graphql.Fields) graphql.Fields) graphql.Fields {
@@ -75,6 +85,44 @@ func SetupDevDatabase(sqlDB *sql.DB) error {
 
 func QuoteMeta(r string) string {
 	return "^" + regexp.QuoteMeta(r) + "$"
+}
+
+func SetupGorm(t *testing.T, mock sqlmock.Sqlmock, sqlDB *sql.DB) (graphql.Schema, context.Context) {
+	mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = $1 AND table_type = $2`)).WithArgs("authors", "BASE TABLE").WillReturnRows(sqlmock.NewRows(
+		[]string{"count"}).
+		AddRow(0))
+
+	mock.ExpectExec(QuoteMeta(`CREATE TABLE "authors" ("id" bigserial,"name" text,PRIMARY KEY ("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
+
+	mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = $1 AND table_type = $2`)).WithArgs("reviews", "BASE TABLE").WillReturnRows(sqlmock.NewRows(
+		[]string{"count"}).
+		AddRow(0))
+
+	mock.ExpectExec(QuoteMeta(`CREATE TABLE "reviews" ("id" bigserial,"star" bigint,"body" text,"book_id" bigint,PRIMARY KEY ("id"),CONSTRAINT "fk_books_reviews" FOREIGN KEY ("book_id") REFERENCES "books"("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
+
+	mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = $1 AND table_type = $2`)).WithArgs("books", "BASE TABLE").WillReturnRows(sqlmock.NewRows(
+		[]string{"count"}).
+		AddRow(0))
+
+	mock.ExpectExec(QuoteMeta(`CREATE TABLE "books" ("id" bigserial,"title" text,"author_id" bigint,PRIMARY KEY ("id"),CONSTRAINT "fk_books_author" FOREIGN KEY ("author_id") REFERENCES "authors"("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
+
+	ctx := NewContext(sqlDB)
+
+	if err := ctx.Value(ContextKeyDB).(*gorm.DB).AutoMigrate(&data.Author{}, &data.Review{}, &data.Book{}); err != nil {
+		t.Fatalf("auto migrate error, %v\n", err)
+	}
+
+	schemaConfig := graphql.SchemaConfig{
+		Query:    graphql.NewObject(graphql.ObjectConfig{Name: "RootQuery", Fields: CreateFields(BookQueries)}),
+		Mutation: graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: CreateFields(AuthorMutations, ReviewMutations, BookMutations)}),
+	}
+	var schema graphql.Schema
+	if s, err := graphql.NewSchema(schemaConfig); err != nil {
+		log.Fatalf("Failed to create new GraphQL Schema, err %v", err)
+	} else {
+		schema = s
+	}
+	return schema, ctx
 }
 
 func QLTest(t *testing.T, schema graphql.Schema, ctx context.Context) (func(query string, str string) *graphql.Result, func(query string, str string) *graphql.Result) {
