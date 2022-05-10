@@ -62,8 +62,8 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Authors func(childComplexity int) int
-		Books   func(childComplexity int) int
+		Authors func(childComplexity int, queryOffset *int, queryLimit *int, id *int, name *string) int
+		Books   func(childComplexity int, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) int
 	}
 }
 
@@ -75,8 +75,8 @@ type MutationResolver interface {
 	CreateBook(ctx context.Context, input model.NewBook) (*model.Book, error)
 }
 type QueryResolver interface {
-	Authors(ctx context.Context) ([]*model.Author, error)
-	Books(ctx context.Context) ([]*model.Book, error)
+	Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error)
+	Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) ([]*model.Book, error)
 }
 
 type executableSchema struct {
@@ -158,14 +158,24 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		return e.complexity.Query.Authors(childComplexity), true
+		args, err := ec.field_Query_authors_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Authors(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["id"].(*int), args["name"].(*string)), true
 
 	case "Query.books":
 		if e.complexity.Query.Books == nil {
 			break
 		}
 
-		return e.complexity.Query.Books(childComplexity), true
+		args, err := ec.field_Query_books_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Books(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["id"].(*int), args["title"].(*string), args["authorName"].(*string)), true
 
 	}
 	return 0, false
@@ -253,8 +263,19 @@ type Book {
 }
 
 type Query {
-  authors: [Author!]!
-  books: [Book!]
+  authors(
+    query_offset: Int = 0
+    query_limit: Int = 10
+    id: Int
+    name: String
+  ): [Author!]!
+  books(
+    query_offset: Int = 0
+    query_limit: Int = 10
+    id: Int
+    title: String
+    authorName: String
+  ): [Book!]
 }
 
 input NewAuthor {
@@ -320,6 +341,99 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		}
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_authors_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 *int
+	if tmp, ok := rawArgs["query_offset"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_offset"))
+		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query_offset"] = arg0
+	var arg1 *int
+	if tmp, ok := rawArgs["query_limit"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_limit"))
+		arg1, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query_limit"] = arg1
+	var arg2 *int
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg2
+	var arg3 *string
+	if tmp, ok := rawArgs["name"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+		arg3, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["name"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_books_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 *int
+	if tmp, ok := rawArgs["query_offset"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_offset"))
+		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query_offset"] = arg0
+	var arg1 *int
+	if tmp, ok := rawArgs["query_limit"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_limit"))
+		arg1, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query_limit"] = arg1
+	var arg2 *int
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg2
+	var arg3 *string
+	if tmp, ok := rawArgs["title"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
+		arg3, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["title"] = arg3
+	var arg4 *string
+	if tmp, ok := rawArgs["authorName"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
+		arg4, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["authorName"] = arg4
 	return args, nil
 }
 
@@ -725,7 +839,7 @@ func (ec *executionContext) _Query_authors(ctx context.Context, field graphql.Co
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Authors(rctx)
+		return ec.resolvers.Query().Authors(rctx, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["id"].(*int), fc.Args["name"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -758,6 +872,17 @@ func (ec *executionContext) fieldContext_Query_authors(ctx context.Context, fiel
 			return nil, fmt.Errorf("no field named %q was found under type Author", field.Name)
 		},
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_authors_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
+	}
 	return fc, nil
 }
 
@@ -775,7 +900,7 @@ func (ec *executionContext) _Query_books(ctx context.Context, field graphql.Coll
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Books(rctx)
+		return ec.resolvers.Query().Books(rctx, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["id"].(*int), fc.Args["title"].(*string), fc.Args["authorName"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -806,6 +931,17 @@ func (ec *executionContext) fieldContext_Query_books(ctx context.Context, field 
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Book", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_books_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
 	}
 	return fc, nil
 }
@@ -3765,6 +3901,22 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 		return graphql.Null
 	}
 	res := graphql.MarshalBoolean(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v interface{}) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalInt(*v)
 	return res
 }
 

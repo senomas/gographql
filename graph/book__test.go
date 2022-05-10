@@ -37,7 +37,7 @@ func TestTodo(t *testing.T) {
 	}
 
 	t.Run("find books", func(t *testing.T) {
-		mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
+		mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
 		mock.ExpectQuery(QuoteMeta(`SELECT * FROM "authors" WHERE id = $1`)).WithArgs("{2,1}").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 
 		type respType struct {
@@ -47,6 +47,108 @@ func TestTodo(t *testing.T) {
 		mock.MatchExpectationsInOrder(false)
 		c.MustPost(`{
 			books {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(db))
+		mock.MatchExpectationsInOrder(true)
+
+		JsonMatch(t, &respType{
+			Books: []model.Book{
+				{
+					ID:    1,
+					Title: "Harry Potter and the Sorcerer's Stone",
+					Author: &model.Author{
+						ID:   1,
+						Name: "J.K. Rowling",
+					},
+				},
+				{
+					ID:    2,
+					Title: "Harry Potter and the Chamber of Secrets",
+					Author: &model.Author{
+						ID:   1,
+						Name: "J.K. Rowling",
+					},
+				},
+				{
+					ID:    3,
+					Title: "Harry Potter and the Book of Evil",
+					Author: &model.Author{
+						ID:   2,
+						Name: "Lord Voldermort",
+					},
+				},
+			},
+		}, &resp)
+	})
+
+	t.Run("find books with limit", func(t *testing.T) {
+		mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books" LIMIT 100`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
+		mock.ExpectQuery(QuoteMeta(`SELECT * FROM "authors" WHERE id = $1`)).WithArgs("{2,1}").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
+
+		type respType struct {
+			Books []model.Book
+		}
+		var resp respType
+		mock.MatchExpectationsInOrder(false)
+		c.MustPost(`{
+			books(query_limit: 100) {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(db))
+		mock.MatchExpectationsInOrder(true)
+
+		JsonMatch(t, &respType{
+			Books: []model.Book{
+				{
+					ID:    1,
+					Title: "Harry Potter and the Sorcerer's Stone",
+					Author: &model.Author{
+						ID:   1,
+						Name: "J.K. Rowling",
+					},
+				},
+				{
+					ID:    2,
+					Title: "Harry Potter and the Chamber of Secrets",
+					Author: &model.Author{
+						ID:   1,
+						Name: "J.K. Rowling",
+					},
+				},
+				{
+					ID:    3,
+					Title: "Harry Potter and the Book of Evil",
+					Author: &model.Author{
+						ID:   2,
+						Name: "Lord Voldermort",
+					},
+				},
+			},
+		}, &resp)
+	})
+
+	t.Run("find books filter by title and authorName", func(t *testing.T) {
+		mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books" WHERE title LIKE $1 AND author_id = SELECT id FROM "author" WHERE name LIKE $2 LIMIT 10`)).WithArgs("Harry Potter", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
+		mock.ExpectQuery(QuoteMeta(`SELECT * FROM "authors" WHERE id = $1`)).WithArgs("{2,1}").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
+
+		type respType struct {
+			Books []model.Book
+		}
+		var resp respType
+		mock.MatchExpectationsInOrder(false)
+		c.MustPost(`{
+			books(title: "Harry Potter", authorName: "J.K. Rowling") {
 				id
 				title
 				author {

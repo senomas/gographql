@@ -76,7 +76,7 @@ func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*mod
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
 
-func (ds *DataSource) Authors(ctx context.Context) ([]*model.Author, error) {
+func (ds *DataSource) Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		fields = append(fields, f.Name)
@@ -90,7 +90,7 @@ func (ds *DataSource) Authors(ctx context.Context) ([]*model.Author, error) {
 	return authors, nil
 }
 
-func (ds *DataSource) Books(ctx context.Context) ([]*model.Book, error) {
+func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) ([]*model.Book, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		if f.Name == "author" {
@@ -100,7 +100,23 @@ func (ds *DataSource) Books(ctx context.Context) ([]*model.Book, error) {
 		}
 	}
 	var books []*model.Book
-	result := ds.DB.Select(fields).Find(&books)
+	tx := ds.DB.Select(fields)
+	if queryOffset != nil {
+		tx = tx.Offset(*queryOffset)
+	}
+	if queryLimit != nil {
+		tx = tx.Limit(*queryLimit)
+	}
+	if id != nil {
+		tx.Where("id = ?", id)
+	}
+	if title != nil {
+		tx.Where("title LIKE ?", title)
+	}
+	if authorName != nil {
+		tx.Where("author_id = ?", ds.DB.Select("id").Where("name LIKE ?", authorName).Table("author"))
+	}
+	result := tx.Find(&books)
 	if result.Error != nil {
 		return nil, result.Error
 	}

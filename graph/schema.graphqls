@@ -14,8 +14,19 @@ type Book {
 }
 
 type Query {
-  authors: [Author!]!
-  books: [Book!]
+  authors(
+    query_offset: Int = 0
+    query_limit: Int = 10
+    id: Int
+    name: String
+  ): [Author!]!
+  books(
+    query_offset: Int = 0
+    query_limit: Int = 10
+    id: Int
+    title: String
+    authorName: String
+  ): [Book!]
 }
 
 input NewAuthor {
