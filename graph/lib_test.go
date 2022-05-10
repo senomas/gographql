@@ -42,7 +42,13 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 
 			mock.ExpectExec(QuoteMeta(`CREATE TABLE "books" ("id" bigserial,"title" text UNIQUE,"author_id" bigint,PRIMARY KEY ("id"),CONSTRAINT "fk_books_author" FOREIGN KEY ("author_id") REFERENCES "authors"("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
 
-			db.AutoMigrate(&model.Author{}, &model.Book{})
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = $1 AND table_type = $2`)).WithArgs("reviews", "BASE TABLE").WillReturnRows(sqlmock.NewRows(
+				[]string{"count"}).
+				AddRow(0))
+
+			mock.ExpectExec(QuoteMeta(`CREATE TABLE "reviews" ("id" bigserial,"book_id" bigint,"star" bigint,"text" text,PRIMARY KEY ("id"),CONSTRAINT "fk_books_reviews" FOREIGN KEY ("book_id") REFERENCES "books"("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
+
+			db.AutoMigrate(&model.Author{}, &model.Book{}, &model.Review{})
 
 			return sqlDB, db, mock, mock.ExpectationsWereMet()
 		}

@@ -6,10 +6,11 @@ type Author struct {
 }
 
 type Book struct {
-	ID       int     `json:"id" gorm:"primaryKey"`
-	Title    string  `json:"title" gorm:"unique"`
-	AuthorID int     `json:"-"`
-	Author   *Author `json:"author"`
+	ID       int       `json:"id" gorm:"primaryKey"`
+	Title    string    `json:"title" gorm:"unique"`
+	AuthorID int       `json:"-"`
+	Author   *Author   `json:"author"`
+	Reviews  []*Review `json:"reviews"`
 }
 
 type NewAuthor struct {
@@ -19,4 +20,11 @@ type NewAuthor struct {
 type NewBook struct {
 	Title      string `json:"title"`
 	AuthorName string `json:"authorName"`
+}
+
+type Review struct {
+	ID     int    `json:"id" gorm:"primaryKey"`
+	BookID int    `json:"-"`
+	Star   int    `json:"star"`
+	Text   string `json:"text"`
 }

@@ -7,10 +7,17 @@ type Author {
   name: String!
 }
 
+type Review {
+  id: Int!
+  star: Int!
+  text: String!
+}
+
 type Book {
   id: Int!
   title: String!
   author: Author!
+  reviews: [Review!]!
 }
 
 type Query {
@@ -26,7 +33,7 @@ type Query {
     id: Int
     title: String
     authorName: String
-  ): [Book!]
+  ): [Book!]!
 }
 
 input NewAuthor {
