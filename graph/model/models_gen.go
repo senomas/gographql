@@ -22,6 +22,12 @@ type NewBook struct {
 	AuthorName string `json:"authorName"`
 }
 
+type NewReview struct {
+	BookID int    `json:"bookId"`
+	Star   int    `json:"star"`
+	Text   string `json:"text"`
+}
+
 type Review struct {
 	ID     int    `json:"id" gorm:"primaryKey"`
 	BookID int    `json:"-"`
