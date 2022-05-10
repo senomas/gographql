@@ -20,6 +20,7 @@ test:
 	go test ./... -p 1 -v -failfast
 
 short:
+	go clean -testcache
 	go test ./... -v -failfast -short
 
 dummy:
