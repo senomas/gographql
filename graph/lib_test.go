@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"regexp"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -21,6 +24,20 @@ func JsonMatch(t *testing.T, expected interface{}, resp interface{}) {
 	eJSON, _ := json.MarshalIndent(expected, "", "\t")
 
 	assert.Equal(t, string(eJSON), string(rJSON))
+}
+
+type MatchPQArray struct {
+	Value string
+}
+
+func (m *MatchPQArray) Match(v driver.Value) bool {
+	txt := v.(string)
+	av := strings.Split(txt[1:len(txt)-1], ",")
+	sort.Slice(av, func(i, j int) bool {
+		return av[i] < av[j]
+	})
+	st := fmt.Sprintf("{%s}", strings.Join(av, ","))
+	return st == m.Value
 }
 
 func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {

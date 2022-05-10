@@ -58,3 +58,5 @@ models:
     fields:
       author:
         resolver: true
+      reviews:
+        resolver: true

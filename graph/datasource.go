@@ -17,8 +17,9 @@ const Context_DataSource = ContextID("DataSource")
 const Context_Parent = ContextID("Parent")
 
 type DataSource struct {
-	DB           *gorm.DB
-	AuthorLoader *dataloader.Loader
+	DB            *gorm.DB
+	AuthorLoader  *dataloader.Loader
+	ReviewsLoader *dataloader.Loader
 }
 
 type DataLoaderKey struct {
@@ -38,6 +39,7 @@ func (d *DataLoaderKey) Raw() interface{} {
 func NewDataSource(db *gorm.DB) *DataSource {
 	d := DataSource{DB: db}
 	d.AuthorLoader = dataloader.NewBatchedLoader(d.authorLoader)
+	d.ReviewsLoader = dataloader.NewBatchedLoader(d.reviewsLoader)
 	return &d
 }
 
@@ -76,6 +78,21 @@ func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*mod
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
 
+func (ds *DataSource) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
+	review := &model.Review{
+		BookID: input.BookID,
+		Star:   input.Star,
+		Text:   input.Text,
+	}
+	result := ds.DB.Create(review)
+	if result.Error != nil {
+		return review, result.Error
+	} else if result.RowsAffected == 1 {
+		return review, nil
+	}
+	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
+}
+
 func (ds *DataSource) Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
@@ -95,6 +112,8 @@ func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *i
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		if f.Name == "author" {
 			fields = append(fields, "author_id")
+		} else if f.Name == "reviews" {
+			// no field
 		} else {
 			fields = append(fields, f.Name)
 		}
@@ -127,6 +146,11 @@ func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *i
 func (ds *DataSource) BookAuthor(ctx context.Context, obj *model.Book) (*model.Author, error) {
 	data, err := ds.AuthorLoader.Load(ctx, &DataLoaderKey{Kind: "BookAuthor.byID", key: fmt.Sprintf("BookAuthor.%v", obj.AuthorID), Parent: obj})()
 	return data.(*model.Author), err
+}
+
+func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book) ([]*model.Review, error) {
+	data, err := ds.ReviewsLoader.Load(ctx, &DataLoaderKey{Kind: "BookReviews.byID", key: fmt.Sprintf("BookReviews.%v", obj.ID), Parent: obj})()
+	return data.([]*model.Review), err
 }
 
 func (ds *DataSource) authorLoader(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
@@ -168,6 +192,47 @@ func (ds *DataSource) authorLoader(ctx context.Context, keys dataloader.Keys) []
 			}
 		}
 	}
-	// result := ds.DB.Select(fields).Where("id = ?", obj.AuthorID).Find(&author)
+	return results
+}
+
+func (ds *DataSource) reviewsLoader(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
+	results := make([]*dataloader.Result, len(keys))
+	var byIDs []int
+	var byIDixs []int
+	for ix, _key := range keys {
+		key := _key.(*DataLoaderKey)
+		switch key.Kind {
+		case "BookReviews.byID":
+			byIDixs = append(byIDixs, ix)
+			byIDs = append(byIDs, key.Parent.(*model.Book).ID)
+		default:
+			fmt.Printf("authorLoader.Kind '%s' not supported!", key.Kind)
+		}
+	}
+	if len(byIDs) > 0 {
+		var reviews []*model.Review
+		result := ds.DB.Where("id = ?", pq.Array(byIDs)).Find(&reviews)
+		if result.Error != nil {
+			for _, ix := range byIDixs {
+				results[ix] = &dataloader.Result{
+					Error: result.Error,
+				}
+			}
+		} else {
+			for i, ix := range byIDixs {
+				id := byIDs[i]
+				var breviews []*model.Review
+				for _, r := range reviews {
+					if r.BookID == id {
+						breviews = append(breviews, r)
+					}
+				}
+				results[ix] = &dataloader.Result{
+					Data:  breviews,
+					Error: result.Error,
+				}
+			}
+		}
+	}
 	return results
 }
