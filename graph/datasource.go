@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -76,6 +77,12 @@ func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*mod
 	}
 	result = ds.DB.Create(book)
 	if result.Error != nil {
+		emsg := result.Error.Error()
+		if strings.Contains(emsg, "duplicate key value violates unique constraint") {
+			if strings.Contains(emsg, `"books_title_key"`) {
+				return book, fmt.Errorf(`duplicate key books.title "%s"`, book.Title)
+			}
+		}
 		return book, result.Error
 	} else if result.RowsAffected == 1 {
 		return book, nil

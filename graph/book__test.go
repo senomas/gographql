@@ -2,6 +2,7 @@ package graph_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -470,5 +471,43 @@ func TestTodo(t *testing.T) {
 				},
 			},
 		}, &resp)
+	})
+
+	t.Run("create duplicate book", func(t *testing.T) {
+		if mock != nil {
+			mock.ExpectQuery(QuoteMeta(`SELECT "id" FROM "authors" WHERE name = $1 LIMIT 1`)).WithArgs("J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+			mock.ExpectBegin()
+			mock.ExpectQuery(QuoteMeta(`INSERT INTO "books" ("title","author_id") VALUES ($1,$2) RETURNING "id"`)).WithArgs("Harry Potter and the Unknown", 1).WillReturnError(errors.New(`ERROR: duplicate key value violates unique constraint "books_title_key" (SQLSTATE 23505)`))
+			mock.ExpectRollback()
+		}
+		defer func() {
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+		}()
+
+		type CreateBook struct {
+			ID     int
+			Title  string
+			Author model.Author
+		}
+		type respType struct {
+			CreateBook CreateBook
+		}
+		var resp respType
+		err := c.Post(`mutation {
+			createBook(input: {
+				title: "Harry Potter and the Unknown"
+				authorName: "J.K. Rowling"
+			}) {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(graph.NewDataSource(db)))
+		assert.ErrorContains(t, err, `duplicate key books.title \"Harry Potter and the Unknown\"`)
 	})
 }

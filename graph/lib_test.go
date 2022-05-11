@@ -72,6 +72,17 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 			)
 		}
 	}
+	if gormLogger == nil {
+		gormLogger = logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             time.Second,
+				LogLevel:                  logger.Silent,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
+			},
+		)
+	}
 
 	if dsnPostgre != nil {
 		if db, err := gorm.Open(postgres.New(postgres.Config{DSN: *dsnPostgre}), &gorm.Config{Logger: gormLogger}); err != nil {
