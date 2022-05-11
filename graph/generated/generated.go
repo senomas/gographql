@@ -61,6 +61,7 @@ type ComplexityRoot struct {
 		CreateAuthor func(childComplexity int, input model.NewAuthor) int
 		CreateBook   func(childComplexity int, input model.NewBook) int
 		CreateReview func(childComplexity int, input model.NewReview) int
+		UpdateBook   func(childComplexity int, input model.UpdateBook) int
 	}
 
 	Query struct {
@@ -82,6 +83,7 @@ type BookResolver interface {
 type MutationResolver interface {
 	CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error)
 	CreateBook(ctx context.Context, input model.NewBook) (*model.Book, error)
+	UpdateBook(ctx context.Context, input model.UpdateBook) (*model.Book, error)
 	CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error)
 }
 type QueryResolver interface {
@@ -187,6 +189,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.CreateReview(childComplexity, args["input"].(model.NewReview)), true
 
+	case "Mutation.updateBook":
+		if e.complexity.Mutation.UpdateBook == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateBook_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateBook(childComplexity, args["input"].(model.UpdateBook)), true
+
 	case "Query.authors":
 		if e.complexity.Query.Authors == nil {
 			break
@@ -246,6 +260,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputNewBook,
 		ec.unmarshalInputNewReview,
 		ec.unmarshalInputReviewFilter,
+		ec.unmarshalInputUpdateBook,
 	)
 	first := true
 
@@ -360,6 +375,12 @@ input NewBook {
   authorName: String!
 }
 
+input UpdateBook {
+  id: Int!
+  title: String
+  authorName: String
+}
+
 input NewReview {
   bookId: Int!
   star: Int!
@@ -370,6 +391,7 @@ type Mutation {
   createAuthor(input: NewAuthor!): Author!
 
   createBook(input: NewBook!): Book!
+  updateBook(input: UpdateBook!): Book!
 
   createReview(input: NewReview!): Review!
 }
@@ -451,6 +473,21 @@ func (ec *executionContext) field_Mutation_createReview_args(ctx context.Context
 	if tmp, ok := rawArgs["input"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 		arg0, err = ec.unmarshalNNewReview2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐNewReview(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateBook_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.UpdateBook
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalNUpdateBook2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐUpdateBook(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -987,6 +1024,71 @@ func (ec *executionContext) fieldContext_Mutation_createBook(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_createBook_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateBook(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateBook(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateBook(rctx, fc.Args["input"].(model.UpdateBook))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Book)
+	fc.Result = res
+	return ec.marshalNBook2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐBook(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateBook(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Book_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Book_title(ctx, field)
+			case "author":
+				return ec.fieldContext_Book_author(ctx, field)
+			case "reviews":
+				return ec.fieldContext_Book_reviews(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Book", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateBook_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return
 	}
@@ -3426,6 +3528,45 @@ func (ec *executionContext) unmarshalInputReviewFilter(ctx context.Context, obj 
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpdateBook(ctx context.Context, obj interface{}) (model.UpdateBook, error) {
+	var it model.UpdateBook
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "title":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
+			it.Title, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "authorName":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
+			it.AuthorName, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -3576,6 +3717,15 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createBook(ctx, field)
+			})
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "updateBook":
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateBook(ctx, field)
 			})
 
 			if out.Values[i] == graphql.Null {
@@ -4281,6 +4431,11 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNUpdateBook2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐUpdateBook(ctx context.Context, v interface{}) (model.UpdateBook, error) {
+	res, err := ec.unmarshalInputUpdateBook(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {

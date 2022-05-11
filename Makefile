@@ -1,4 +1,5 @@
 BINARY_NAME=gographql
+TEST_PACKAGE=./graph
 
 .PHONY: all test clean
 
@@ -17,18 +18,15 @@ clean:
 test:
 	docker-compose up -d postgres
 	go clean -testcache
-	go test ./... -p 1 -v -failfast
+	go test ${TEST_PACKAGE} -p 1 -v -failfast
 	go clean -testcache
-	TEST_DB_POSTGRES="host=localhost user=demo password=password dbname=demo port=5432 sslmode=disable TimeZone=Asia/Jakarta" go test ./... -v -failfast
+	TEST_DB_POSTGRES="host=localhost user=demo password=password dbname=demo port=5432 sslmode=disable TimeZone=Asia/Jakarta" go test ${TEST_PACKAGE} -v -failfast
 
 db:
 	docker-compose up -d postgres
 	go clean -testcache
-	LOGGER=1 TEST_DB_POSTGRES="host=localhost user=demo password=password dbname=demo port=5432 sslmode=disable TimeZone=Asia/Jakarta" go test ./... -v -failfast
+	LOGGER=1 TEST_DB_POSTGRES="host=localhost user=demo password=password dbname=demo port=5432 sslmode=disable TimeZone=Asia/Jakarta" go test ./graph -v -failfast
 
 mock:
 	go clean -testcache
-	go test ./... -v -failfast
-
-dummy:
-	go test ./db -v -failfast
+	LOGGER=1 go test ${TEST_PACKAGE} -v -failfast

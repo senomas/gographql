@@ -52,6 +52,12 @@ input NewBook {
   authorName: String!
 }
 
+input UpdateBook {
+  id: Int!
+  title: String
+  authorName: String
+}
+
 input NewReview {
   bookId: Int!
   star: Int!
@@ -62,6 +68,7 @@ type Mutation {
   createAuthor(input: NewAuthor!): Author!
 
   createBook(input: NewBook!): Book!
+  updateBook(input: UpdateBook!): Book!
 
   createReview(input: NewReview!): Review!
 }

@@ -52,3 +52,9 @@ type ReviewFilter struct {
 	MinStar *int `json:"minStar"`
 	MaxStar *int `json:"maxStar"`
 }
+
+type UpdateBook struct {
+	ID         int     `json:"id"`
+	Title      *string `json:"title"`
+	AuthorName *string `json:"authorName"`
+}

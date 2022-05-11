@@ -2,6 +2,7 @@ package graph_test
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"sync"
 	"testing"
@@ -512,5 +513,193 @@ func TestTodo(t *testing.T) {
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 		assert.ErrorContains(t, err, `duplicate key books.title \"Harry Potter and the Unknown\"`)
+	})
+
+	t.Run("update book", func(t *testing.T) {
+		if mock != nil {
+			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE id = $1 LIMIT 1`)).WithArgs(4).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(4, "Harry Potter and the Unknown", 2))
+			mock.ExpectQuery(QuoteMeta(`SELECT "id" FROM "authors" WHERE name = $1 LIMIT 1`)).WithArgs("Lord Voldermort").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(2))
+			mock.ExpectBegin()
+			mock.ExpectExec(QuoteMeta(`UPDATE "books" SET "title"=$1,"author_id"=$2 WHERE "id" = $3`)).WithArgs("Harry Potter and the Evil Book", 2, 4).WillReturnResult(driver.RowsAffected(1))
+			mock.ExpectCommit()
+			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(int64(2)).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(2, "Lord Voldermort"))
+		}
+		defer func() {
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+		}()
+
+		type UpdateBook struct {
+			ID     int
+			Title  string
+			Author model.Author
+		}
+		type respType struct {
+			UpdateBook UpdateBook
+		}
+		var resp respType
+		c.MustPost(`mutation {
+			updateBook(input: {
+				id: 4
+				title: "Harry Potter and the Evil Book"
+				authorName: "Lord Voldermort"
+			}) {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(graph.NewDataSource(db)))
+		JsonMatch(t, &respType{
+			UpdateBook: UpdateBook{
+				ID:    4,
+				Title: "Harry Potter and the Evil Book",
+				Author: model.Author{
+					ID:   2,
+					Name: "Lord Voldermort",
+				},
+			},
+		}, &resp)
+	})
+
+	t.Run("find update books", func(t *testing.T) {
+		if mock != nil {
+			authorArgs := NewArrayIntArgs(1, 2)
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2).AddRow(4, "Harry Potter and the Evil Book", 2))
+			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
+		}
+		defer func() {
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+		}()
+
+		type respType struct {
+			Books []model.Book
+		}
+		var resp respType
+		c.MustPost(`{
+			books {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(graph.NewDataSource(db)))
+
+		JsonMatch(t, &respType{
+			Books: []model.Book{
+				{
+					ID:    1,
+					Title: "Harry Potter and the Sorcerer's Stone",
+					Author: &model.Author{
+						ID:   1,
+						Name: "J.K. Rowling",
+					},
+				},
+				{
+					ID:    2,
+					Title: "Harry Potter and the Chamber of Secrets",
+					Author: &model.Author{
+						ID:   1,
+						Name: "J.K. Rowling",
+					},
+				},
+				{
+					ID:    3,
+					Title: "Harry Potter and the Book of Evil",
+					Author: &model.Author{
+						ID:   2,
+						Name: "Lord Voldermort",
+					},
+				},
+				{
+					ID:    4,
+					Title: "Harry Potter and the Evil Book",
+					Author: &model.Author{
+						ID:   2,
+						Name: "Lord Voldermort",
+					},
+				},
+			},
+		}, &resp)
+	})
+
+	t.Run("update book duplicate", func(t *testing.T) {
+		if mock != nil {
+			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE id = $1 LIMIT 1`)).WithArgs(4).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(4, "Harry Potter and the Unknown", 2))
+			mock.ExpectBegin()
+			mock.ExpectExec(QuoteMeta(`UPDATE "books" SET "title"=$1 WHERE "id" = $2`)).WithArgs("Harry Potter and the Sorcerer's Stone", 4).WillReturnError(errors.New(`ERROR: duplicate key value violates unique constraint "books_title_key" (SQLSTATE 23505)`))
+			mock.ExpectRollback()
+		}
+		defer func() {
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+		}()
+
+		type UpdateBook struct {
+			ID     int
+			Title  string
+			Author model.Author
+		}
+		type respType struct {
+			UpdateBook UpdateBook
+		}
+		var resp respType
+		err := c.Post(`mutation {
+			updateBook(input: {
+				id: 4
+				title: "Harry Potter and the Sorcerer's Stone"
+			}) {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(graph.NewDataSource(db)))
+		assert.ErrorContains(t, err, `duplicate key books.title \"Harry Potter and the Sorcerer's Stone\"`)
+	})
+
+	t.Run("update unknown book", func(t *testing.T) {
+		if mock != nil {
+			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE id = $1 LIMIT 1`)).WithArgs(999).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}))
+		}
+		defer func() {
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+		}()
+
+		type UpdateBook struct {
+			ID     int
+			Title  string
+			Author model.Author
+		}
+		type respType struct {
+			UpdateBook UpdateBook
+		}
+		var resp respType
+		err := c.Post(`mutation {
+			updateBook(input: {
+				id: 999
+				title: "Harry Potter and the Sorcerer's Stone"
+			}) {
+				id
+				title
+				author {
+					id
+					name
+				}
+			}
+		}`, &resp, addContext(graph.NewDataSource(db)))
+		assert.ErrorContains(t, err, `book with id '999' not exist`)
 	})
 }

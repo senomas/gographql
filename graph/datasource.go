@@ -90,6 +90,47 @@ func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*mod
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
 
+func (ds *DataSource) UpdateBook(ctx context.Context, input model.UpdateBook) (*model.Book, error) {
+	var book model.Book
+	result := ds.DB.Where("id = ?", input.ID).Limit(1).Find(&book)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return nil, fmt.Errorf("book with id '%v' not exist", input.ID)
+	}
+	fields := []string{}
+	if input.Title != nil {
+		book.Title = *input.Title
+		fields = append(fields, "title")
+	}
+	if input.AuthorName != nil {
+		var author model.Author
+		result := ds.DB.Select([]string{"id"}).Where("name = ?", input.AuthorName).Limit(1).Find(&author)
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected != 1 {
+			return nil, fmt.Errorf("author with name '%v' not exist", input.AuthorName)
+		}
+		book.AuthorID = author.ID
+		fields = append(fields, "author_id")
+	}
+	result = ds.DB.Select(fields).Updates(&book)
+	if result.Error != nil {
+		emsg := result.Error.Error()
+		if strings.Contains(emsg, "duplicate key value violates unique constraint") {
+			if strings.Contains(emsg, `"books_title_key"`) {
+				return &book, fmt.Errorf(`duplicate key books.title "%s"`, book.Title)
+			}
+		}
+		return &book, result.Error
+	} else if result.RowsAffected == 1 {
+		return &book, nil
+	}
+	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
+}
+
 func (ds *DataSource) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
 	review := &model.Review{
 		BookID: input.BookID,
