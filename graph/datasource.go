@@ -203,19 +203,21 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 				tx.Where("books.id = ?", filter.ID)
 			}
 			if filter.Title != nil {
-				tx.Where("books.title LIKE ?", filter.Title)
+				FilterText(filter.Title, tx, "books.title")
 			}
 			if filter.AuthorName != nil {
-				tx.Where("author_id = (?)", ds.DB.Select("id").Where("name LIKE ?", filter.AuthorName).Table("authors"))
+				atx := ds.DB.Select("id")
+				FilterText(filter.AuthorName, atx, "name")
+				tx.Where("author_id = (?)", atx.Table("authors"))
 			}
-			if filter.MinStar != nil || filter.MaxStar != nil {
+			if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
 				tx.Distinct()
 				tx.Joins("JOIN reviews ON books.id = reviews.book_id")
-				if filter.MinStar != nil {
-					tx.Where("reviews.star >= ?", filter.MinStar)
+				if filter.Star.Min != nil {
+					tx.Where("reviews.star >= ?", filter.Star.Min)
 				}
-				if filter.MaxStar != nil {
-					tx.Where("reviews.star <= ?", filter.MaxStar)
+				if filter.Star.Max != nil {
+					tx.Where("reviews.star <= ?", filter.Star.Max)
 				}
 			}
 		}
@@ -309,11 +311,13 @@ func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, offset *
 			tx = tx.Limit(*param.limit)
 		}
 		if param.filter != nil {
-			if param.filter.MinStar != nil {
-				tx = tx.Where("star >= ?", param.filter.MinStar)
-			}
-			if param.filter.MaxStar != nil {
-				tx = tx.Where("star <= ?", param.filter.MaxStar)
+			if param.filter.Star != nil {
+				if param.filter.Star.Min != nil {
+					tx = tx.Where("star >= ?", param.filter.Star.Min)
+				}
+				if param.filter.Star.Max != nil {
+					tx = tx.Where("star <= ?", param.filter.Star.Max)
+				}
 			}
 		}
 		return tx.Find(&reviews)

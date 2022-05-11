@@ -1,13 +1,19 @@
 package model
 
+import (
+	"fmt"
+	"io"
+	"strconv"
+)
+
 type Author struct {
 	ID   int    `json:"id" gorm:"primaryKey"`
 	Name string `json:"name" gorm:"unique"`
 }
 
 type AuthorFilter struct {
-	ID   *int    `json:"id"`
-	Name *string `json:"name"`
+	ID   *int        `json:"id"`
+	Name *FilterText `json:"name"`
 }
 
 type Book struct {
@@ -19,11 +25,20 @@ type Book struct {
 }
 
 type BookFilter struct {
-	ID         *int    `json:"id"`
-	Title      *string `json:"title"`
-	AuthorName *string `json:"authorName"`
-	MinStar    *int    `json:"minStar"`
-	MaxStar    *int    `json:"maxStar"`
+	ID         *int            `json:"id"`
+	Title      *FilterText     `json:"title"`
+	AuthorName *FilterText     `json:"authorName"`
+	Star       *FilterIntRange `json:"star"`
+}
+
+type FilterIntRange struct {
+	Min *int `json:"min"`
+	Max *int `json:"max"`
+}
+
+type FilterText struct {
+	Op    FilterTextOp `json:"op"`
+	Value string       `json:"value"`
 }
 
 type NewAuthor struct {
@@ -49,12 +64,52 @@ type Review struct {
 }
 
 type ReviewFilter struct {
-	MinStar *int `json:"minStar"`
-	MaxStar *int `json:"maxStar"`
+	Star *FilterIntRange `json:"star"`
 }
 
 type UpdateBook struct {
 	ID         int     `json:"id"`
 	Title      *string `json:"title"`
 	AuthorName *string `json:"authorName"`
+}
+
+type FilterTextOp string
+
+const (
+	FilterTextOpLike FilterTextOp = "LIKE"
+	FilterTextOpEq   FilterTextOp = "EQ"
+)
+
+var AllFilterTextOp = []FilterTextOp{
+	FilterTextOpLike,
+	FilterTextOpEq,
+}
+
+func (e FilterTextOp) IsValid() bool {
+	switch e {
+	case FilterTextOpLike, FilterTextOpEq:
+		return true
+	}
+	return false
+}
+
+func (e FilterTextOp) String() string {
+	return string(e)
+}
+
+func (e *FilterTextOp) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FilterTextOp(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FilterTextOp", str)
+	}
+	return nil
+}
+
+func (e FilterTextOp) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
 }

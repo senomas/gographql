@@ -2,6 +2,21 @@
 #
 # https://gqlgen.com/getting-started/
 
+enum FilterTextOp {
+  LIKE
+  EQ
+}
+
+input FilterText {
+  op: FilterTextOp!
+  value: String!
+}
+
+input FilterIntRange {
+  min: Int
+  max: Int
+}
+
 type Author {
   id: Int!
   name: String!
@@ -22,20 +37,18 @@ type Book {
 
 input AuthorFilter {
   id: Int
-  name: String
+  name: FilterText
 }
 
 input BookFilter {
   id: Int
-  title: String
-  authorName: String
-  minStar: Int
-  maxStar: Int
+  title: FilterText
+  authorName: FilterText
+  star: FilterIntRange
 }
 
 input ReviewFilter {
-  minStar: Int
-  maxStar: Int
+  star: FilterIntRange
 }
 
 type Query {

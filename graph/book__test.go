@@ -155,7 +155,7 @@ func TestTodo(t *testing.T) {
 
 	t.Run("find books filter by title and authorName", func(t *testing.T) {
 		if mock != nil {
-			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" WHERE books.title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name LIKE $2) LIMIT 10`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" WHERE books.title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name = $2) LIMIT 10`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
 		defer func() {
@@ -170,8 +170,14 @@ func TestTodo(t *testing.T) {
 		var resp respType
 		c.MustPost(`{
 			books(filter: {
-					title: "%Harry Potter%",
-					authorName: "J.K. Rowling"
+					title: {
+						op: LIKE
+						value: "%Harry Potter%"
+					}
+					authorName: {
+						op: EQ
+						value: "J.K. Rowling"
+					}
 				}) {
 				id
 				title
@@ -296,7 +302,7 @@ func TestTodo(t *testing.T) {
 			books {
 				id
 				title
-				reviews(filter: { minStar: 3}) {
+				reviews(filter: { star: { min: 3}}) {
 					id
 					star
 					text
@@ -357,7 +363,7 @@ func TestTodo(t *testing.T) {
 		}
 		var resp respType
 		c.MustPost(`{
-			books(filter: {title: "%Harry Potter%", minStar: 3}) {
+			books(filter: {title: {op: LIKE, value: "%Harry Potter%"}, star: {min: 3}}) {
 				id
 				title
 			}

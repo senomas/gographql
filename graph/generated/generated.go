@@ -270,6 +270,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAuthorFilter,
 		ec.unmarshalInputBookFilter,
+		ec.unmarshalInputFilterIntRange,
+		ec.unmarshalInputFilterText,
 		ec.unmarshalInputNewAuthor,
 		ec.unmarshalInputNewBook,
 		ec.unmarshalInputNewReview,
@@ -339,6 +341,21 @@ var sources = []*ast.Source{
 #
 # https://gqlgen.com/getting-started/
 
+enum FilterTextOp {
+  LIKE
+  EQ
+}
+
+input FilterText {
+  op: FilterTextOp!
+  value: String!
+}
+
+input FilterIntRange {
+  min: Int
+  max: Int
+}
+
 type Author {
   id: Int!
   name: String!
@@ -359,20 +376,18 @@ type Book {
 
 input AuthorFilter {
   id: Int
-  name: String
+  name: FilterText
 }
 
 input BookFilter {
   id: Int
-  title: String
-  authorName: String
-  minStar: Int
-  maxStar: Int
+  title: FilterText
+  authorName: FilterText
+  star: FilterIntRange
 }
 
 input ReviewFilter {
-  minStar: Int
-  maxStar: Int
+  star: FilterIntRange
 }
 
 type Query {
@@ -3434,7 +3449,7 @@ func (ec *executionContext) unmarshalInputAuthorFilter(ctx context.Context, obj 
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-			it.Name, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			it.Name, err = ec.unmarshalOFilterText2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterText(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3465,7 +3480,7 @@ func (ec *executionContext) unmarshalInputBookFilter(ctx context.Context, obj in
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
-			it.Title, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			it.Title, err = ec.unmarshalOFilterText2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterText(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3473,23 +3488,77 @@ func (ec *executionContext) unmarshalInputBookFilter(ctx context.Context, obj in
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
-			it.AuthorName, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			it.AuthorName, err = ec.unmarshalOFilterText2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterText(ctx, v)
 			if err != nil {
 				return it, err
 			}
-		case "minStar":
+		case "star":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
-			it.MinStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("star"))
+			it.Star, err = ec.unmarshalOFilterIntRange2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterIntRange(ctx, v)
 			if err != nil {
 				return it, err
 			}
-		case "maxStar":
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputFilterIntRange(ctx context.Context, obj interface{}) (model.FilterIntRange, error) {
+	var it model.FilterIntRange
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "min":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
-			it.MaxStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("min"))
+			it.Min, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "max":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("max"))
+			it.Max, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputFilterText(ctx context.Context, obj interface{}) (model.FilterText, error) {
+	var it model.FilterText
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "op":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("op"))
+			it.Op, err = ec.unmarshalNFilterTextOp2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterTextOp(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "value":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			it.Value, err = ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3601,19 +3670,11 @@ func (ec *executionContext) unmarshalInputReviewFilter(ctx context.Context, obj 
 
 	for k, v := range asMap {
 		switch k {
-		case "minStar":
+		case "star":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
-			it.MinStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
-			if err != nil {
-				return it, err
-			}
-		case "maxStar":
-			var err error
-
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
-			it.MaxStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("star"))
+			it.Star, err = ec.unmarshalOFilterIntRange2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterIntRange(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4434,6 +4495,16 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) unmarshalNFilterTextOp2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterTextOp(ctx context.Context, v interface{}) (model.FilterTextOp, error) {
+	var res model.FilterTextOp
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFilterTextOp2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterTextOp(ctx context.Context, sel ast.SelectionSet, v model.FilterTextOp) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -4835,6 +4906,22 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	}
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOFilterIntRange2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterIntRange(ctx context.Context, v interface{}) (*model.FilterIntRange, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputFilterIntRange(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOFilterText2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterText(ctx context.Context, v interface{}) (*model.FilterText, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputFilterText(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v interface{}) (*int, error) {
