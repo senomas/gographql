@@ -40,7 +40,7 @@ func TestTodo(t *testing.T) {
 	t.Run("find books", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
 		defer func() {
@@ -97,7 +97,7 @@ func TestTodo(t *testing.T) {
 	t.Run("find books with limit", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books" LIMIT 100`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 100`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
 		defer func() {
@@ -153,7 +153,7 @@ func TestTodo(t *testing.T) {
 
 	t.Run("find books filter by title and authorName", func(t *testing.T) {
 		if mock != nil {
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title","author_id" FROM "books" WHERE title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name LIKE $2) LIMIT 10`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" WHERE books.title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name LIKE $2) LIMIT 10`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
 		defer func() {
@@ -202,8 +202,8 @@ func TestTodo(t *testing.T) {
 	t.Run("find books + reviews", func(t *testing.T) {
 		if mock != nil {
 			reviewArgs := NewArrayIntArgs(1, 2, 3)
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
-			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3)`)).WithArgs(reviewArgs, reviewArgs, reviewArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill").AddRow(3, 3, 1, "Fake Books").AddRow(4, 1, 2, "The Man With Funny Hat"))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
+			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3)`)).WithArgs(reviewArgs, reviewArgs, reviewArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill").AddRow(3, 3, 1, "Fake Books").AddRow(4, 1, 3, "The Man With Funny Hat"))
 		}
 		defer func() {
 			if mock != nil {
@@ -240,7 +240,7 @@ func TestTodo(t *testing.T) {
 						},
 						{
 							ID:   4,
-							Star: 2,
+							Star: 3,
 							Text: "The Man With Funny Hat",
 						},
 					},
@@ -271,11 +271,11 @@ func TestTodo(t *testing.T) {
 		}, &resp)
 	})
 
-	t.Run("find books + reviews with star >= 3", func(t *testing.T) {
+	t.Run("find books + reviews filter by star", func(t *testing.T) {
 		if mock != nil {
 			reviewArgs := NewArrayIntArgs(1, 2, 3)
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
-			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3) AND star >= $4`)).WithArgs(reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill"))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
+			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3) AND star >= $4`)).WithArgs(reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill").AddRow(4, 1, 3, "The Man With Funny Hat"))
 		}
 		defer func() {
 			if mock != nil {
@@ -310,6 +310,11 @@ func TestTodo(t *testing.T) {
 							Star: 5,
 							Text: "The Boy Who Live",
 						},
+						{
+							ID:   4,
+							Star: 3,
+							Text: "The Man With Funny Hat",
+						},
 					},
 				},
 				{
@@ -332,11 +337,9 @@ func TestTodo(t *testing.T) {
 		}, &resp)
 	})
 
-	t.Run("find books with review.star >= 3", func(t *testing.T) {
+	t.Run("find books filter by title and review.star", func(t *testing.T) {
 		if mock != nil {
-			reviewArgs := NewArrayIntArgs(1, 2, 3)
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
-			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3) AND star >= $4`)).WithArgs(reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill"))
+			mock.ExpectQuery(QuoteMeta(`SELECT DISTINCT books.id,books.title FROM "books" JOIN reviews ON books.id = reviews.book_id WHERE books.title LIKE $1 AND reviews.star >= $2 LIMIT 10`)).WithArgs("%Harry Potter%", 3).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets"))
 		}
 		defer func() {
 			if mock != nil {
@@ -349,7 +352,7 @@ func TestTodo(t *testing.T) {
 		}
 		var resp respType
 		c.MustPost(`{
-			books(minStar: 3) {
+			books(title: "%Harry Potter%", minStar: 3) {
 				id
 				title
 			}
@@ -360,29 +363,10 @@ func TestTodo(t *testing.T) {
 				{
 					ID:    1,
 					Title: "Harry Potter and the Sorcerer's Stone",
-					Reviews: []*model.Review{
-						{
-							ID:   1,
-							Star: 5,
-							Text: "The Boy Who Live",
-						},
-					},
 				},
 				{
 					ID:    2,
 					Title: "Harry Potter and the Chamber of Secrets",
-					Reviews: []*model.Review{
-						{
-							ID:   2,
-							Star: 5,
-							Text: "The Girl Who Kill",
-						},
-					},
-				},
-				{
-					ID:      3,
-					Title:   "Harry Potter and the Book of Evil",
-					Reviews: []*model.Review{},
 				},
 			},
 		}, &resp)
@@ -390,7 +374,7 @@ func TestTodo(t *testing.T) {
 
 	t.Run("find books concurrent", func(t *testing.T) {
 		if mock != nil {
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","title" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
 		}
 		defer func() {
 			if mock != nil {

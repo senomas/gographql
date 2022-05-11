@@ -38,6 +38,8 @@ type Query {
     id: Int
     title: String
     authorName: String
+    minStar: Int
+    maxStar: Int
   ): [Book!]!
 }
 

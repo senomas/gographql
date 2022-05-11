@@ -34,8 +34,8 @@ func (r *queryResolver) Authors(ctx context.Context, queryOffset *int, queryLimi
 	return ctx.Value(Context_DataSource).(*DataSource).Authors(ctx, queryOffset, queryLimit, id, name)
 }
 
-func (r *queryResolver) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) ([]*model.Book, error) {
-	return ctx.Value(Context_DataSource).(*DataSource).Books(ctx, queryOffset, queryLimit, id, title, authorName)
+func (r *queryResolver) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) ([]*model.Book, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).Books(ctx, queryOffset, queryLimit, id, title, authorName, minStar, maxStar)
 }
 
 // Book returns generated.BookResolver implementation.

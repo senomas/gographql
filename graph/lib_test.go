@@ -148,7 +148,7 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 
 			review = model.Review{
 				BookID: 1,
-				Star:   2,
+				Star:   3,
 				Text:   "The Man With Funny Hat",
 			}
 			if result := tx.Create(&review); result.Error != nil {

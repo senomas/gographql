@@ -112,15 +112,15 @@ func (ds *DataSource) Authors(ctx context.Context, queryOffset *int, queryLimit 
 	return authors, nil
 }
 
-func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) ([]*model.Book, error) {
+func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) ([]*model.Book, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		if f.Name == "author" {
-			fields = append(fields, "author_id")
+			fields = append(fields, "books.author_id")
 		} else if f.Name == "reviews" {
 			// no field
 		} else {
-			fields = append(fields, f.Name)
+			fields = append(fields, "books."+f.Name)
 		}
 	}
 	var books []*model.Book
@@ -133,13 +133,23 @@ func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *i
 			tx = tx.Limit(*queryLimit)
 		}
 		if id != nil {
-			tx.Where("id = ?", id)
+			tx.Where("books.id = ?", id)
 		}
 		if title != nil {
-			tx.Where("title LIKE ?", title)
+			tx.Where("books.title LIKE ?", title)
 		}
 		if authorName != nil {
 			tx.Where("author_id = (?)", ds.DB.Select("id").Where("name LIKE ?", authorName).Table("authors"))
+		}
+		if minStar != nil || maxStar != nil {
+			tx.Distinct()
+			tx.Joins("JOIN reviews ON books.id = reviews.book_id")
+			if minStar != nil {
+				tx.Where("reviews.star >= ?", minStar)
+			}
+			if maxStar != nil {
+				tx.Where("reviews.star <= ?", maxStar)
+			}
 		}
 		return tx.Find(&books)
 	}, nil, nil, nil, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {

@@ -65,7 +65,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Authors func(childComplexity int, queryOffset *int, queryLimit *int, id *int, name *string) int
-		Books   func(childComplexity int, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) int
+		Books   func(childComplexity int, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) int
 	}
 
 	Review struct {
@@ -86,7 +86,7 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error)
-	Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string) ([]*model.Book, error)
+	Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) ([]*model.Book, error)
 }
 
 type executableSchema struct {
@@ -209,7 +209,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Books(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["id"].(*int), args["title"].(*string), args["authorName"].(*string)), true
+		return e.complexity.Query.Books(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["id"].(*int), args["title"].(*string), args["authorName"].(*string), args["minStar"].(*int), args["maxStar"].(*int)), true
 
 	case "Review.id":
 		if e.complexity.Review.ID == nil {
@@ -343,6 +343,8 @@ type Query {
     id: Int
     title: String
     authorName: String
+    minStar: Int
+    maxStar: Int
   ): [Book!]!
 }
 
@@ -566,6 +568,24 @@ func (ec *executionContext) field_Query_books_args(ctx context.Context, rawArgs 
 		}
 	}
 	args["authorName"] = arg4
+	var arg5 *int
+	if tmp, ok := rawArgs["minStar"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
+		arg5, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["minStar"] = arg5
+	var arg6 *int
+	if tmp, ok := rawArgs["maxStar"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
+		arg6, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["maxStar"] = arg6
 	return args, nil
 }
 
@@ -1160,7 +1180,7 @@ func (ec *executionContext) _Query_books(ctx context.Context, field graphql.Coll
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Books(rctx, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["id"].(*int), fc.Args["title"].(*string), fc.Args["authorName"].(*string))
+		return ec.resolvers.Query().Books(rctx, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["id"].(*int), fc.Args["title"].(*string), fc.Args["authorName"].(*string), fc.Args["minStar"].(*int), fc.Args["maxStar"].(*int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
