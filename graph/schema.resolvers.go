@@ -30,6 +30,10 @@ func (r *mutationResolver) UpdateBook(ctx context.Context, input model.UpdateBoo
 	return ctx.Value(Context_DataSource).(*DataSource).UpdateBook(ctx, input)
 }
 
+func (r *mutationResolver) DeleteBook(ctx context.Context, id int) (*model.Book, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).DeleteBook(ctx, id)
+}
+
 func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
 	return ctx.Value(Context_DataSource).(*DataSource).CreateReview(ctx, input)
 }

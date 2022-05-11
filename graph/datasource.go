@@ -131,6 +131,24 @@ func (ds *DataSource) UpdateBook(ctx context.Context, input model.UpdateBook) (*
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
 
+func (ds *DataSource) DeleteBook(ctx context.Context, id int) (*model.Book, error) {
+	var book model.Book
+	result := ds.DB.Where("id = ?", id).Limit(1).Find(&book)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return nil, fmt.Errorf("book with id '%v' not exist", id)
+	}
+	result = ds.DB.Delete(&book)
+	if result.Error != nil {
+		return &book, result.Error
+	} else if result.RowsAffected == 1 {
+		return &book, nil
+	}
+	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
+}
+
 func (ds *DataSource) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
 	review := &model.Review{
 		BookID: input.BookID,

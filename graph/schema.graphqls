@@ -69,6 +69,7 @@ type Mutation {
 
   createBook(input: NewBook!): Book!
   updateBook(input: UpdateBook!): Book!
+  deleteBook(id: Int!): Book!
 
   createReview(input: NewReview!): Review!
 }
