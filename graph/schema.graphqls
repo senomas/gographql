@@ -17,7 +17,12 @@ type Book {
   id: Int!
   title: String!
   author: Author!
-  reviews: [Review!]!
+  reviews(
+    query_offset: Int = 0
+    query_limit: Int = 10
+    minStar: Int
+    maxStar: Int
+  ): [Review!]!
 }
 
 type Query {

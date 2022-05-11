@@ -14,8 +14,8 @@ func (r *bookResolver) Author(ctx context.Context, obj *model.Book) (*model.Auth
 	return ctx.Value(Context_DataSource).(*DataSource).BookAuthor(ctx, obj)
 }
 
-func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book) ([]*model.Review, error) {
-	return ctx.Value(Context_DataSource).(*DataSource).BookReviews(ctx, obj)
+func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) ([]*model.Review, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).BookReviews(ctx, obj, queryOffset, queryLimit, minStar, maxStar)
 }
 
 func (r *mutationResolver) CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error) {

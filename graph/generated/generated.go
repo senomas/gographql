@@ -53,7 +53,7 @@ type ComplexityRoot struct {
 	Book struct {
 		Author  func(childComplexity int) int
 		ID      func(childComplexity int) int
-		Reviews func(childComplexity int) int
+		Reviews func(childComplexity int, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) int
 		Title   func(childComplexity int) int
 	}
 
@@ -77,7 +77,7 @@ type ComplexityRoot struct {
 
 type BookResolver interface {
 	Author(ctx context.Context, obj *model.Book) (*model.Author, error)
-	Reviews(ctx context.Context, obj *model.Book) ([]*model.Review, error)
+	Reviews(ctx context.Context, obj *model.Book, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) ([]*model.Review, error)
 }
 type MutationResolver interface {
 	CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error)
@@ -137,7 +137,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		return e.complexity.Book.Reviews(childComplexity), true
+		args, err := ec.field_Book_reviews_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Book.Reviews(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["minStar"].(*int), args["maxStar"].(*int)), true
 
 	case "Book.title":
 		if e.complexity.Book.Title == nil {
@@ -317,7 +322,12 @@ type Book {
   id: Int!
   title: String!
   author: Author!
-  reviews: [Review!]!
+  reviews(
+    query_offset: Int = 0
+    query_limit: Int = 10
+    minStar: Int
+    maxStar: Int
+  ): [Review!]!
 }
 
 type Query {
@@ -363,6 +373,48 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Book_reviews_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 *int
+	if tmp, ok := rawArgs["query_offset"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_offset"))
+		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query_offset"] = arg0
+	var arg1 *int
+	if tmp, ok := rawArgs["query_limit"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_limit"))
+		arg1, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query_limit"] = arg1
+	var arg2 *int
+	if tmp, ok := rawArgs["minStar"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
+		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["minStar"] = arg2
+	var arg3 *int
+	if tmp, ok := rawArgs["maxStar"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
+		arg3, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["maxStar"] = arg3
+	return args, nil
+}
 
 func (ec *executionContext) field_Mutation_createAuthor_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -795,7 +847,7 @@ func (ec *executionContext) _Book_reviews(ctx context.Context, field graphql.Col
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Book().Reviews(rctx, obj)
+		return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["minStar"].(*int), fc.Args["maxStar"].(*int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -829,6 +881,17 @@ func (ec *executionContext) fieldContext_Book_reviews(ctx context.Context, field
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Review", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Book_reviews_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
 	}
 	return fc, nil
 }
