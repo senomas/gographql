@@ -6,7 +6,6 @@ require (
 	github.com/99designs/gqlgen v0.17.5
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/graph-gophers/dataloader v5.0.0+incompatible
-	github.com/lib/pq v1.10.2
 	github.com/stretchr/testify v1.7.1
 	github.com/vektah/gqlparser/v2 v2.4.2
 	gorm.io/driver/postgres v1.3.5

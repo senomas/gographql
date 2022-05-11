@@ -3,10 +3,10 @@ package graph
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/graph-gophers/dataloader"
-	"github.com/lib/pq"
 	"github.com/senomas/gographql/graph/model"
 	"gorm.io/gorm"
 )
@@ -24,11 +24,12 @@ type DataSource struct {
 type BatchLoaderKey struct {
 	idx         int
 	key         string
-	group       string
+	group       *string
 	queryOffset *int
 	queryLimit  *int
 	Param       interface{}
 	processed   bool
+	Query       func(db *gorm.DB, params interface{}) *gorm.DB
 	Find        func(keys []*BatchLoaderKey) *dataloader.Result
 	Filter      func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result
 }
@@ -43,7 +44,7 @@ func (d *BatchLoaderKey) Raw() interface{} {
 
 func NewDataSource(db *gorm.DB) *DataSource {
 	d := DataSource{DB: db}
-	d.BatchLoader = dataloader.NewBatchedLoader(d.batchLoader)
+	d.BatchLoader = dataloader.NewBatchedLoader(d.batchLoader, dataloader.WithWait(100*time.Millisecond))
 	return &d
 }
 
@@ -123,28 +124,42 @@ func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *i
 		}
 	}
 	var books []*model.Book
-	tx := ds.DB.Select(fields)
-	if queryOffset != nil {
-		tx = tx.Offset(*queryOffset)
+	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
+		tx := db.Select(fields)
+		if queryOffset != nil {
+			tx = tx.Offset(*queryOffset)
+		}
+		if queryLimit != nil {
+			tx = tx.Limit(*queryLimit)
+		}
+		if id != nil {
+			tx.Where("id = ?", id)
+		}
+		if title != nil {
+			tx.Where("title LIKE ?", title)
+		}
+		if authorName != nil {
+			tx.Where("author_id = (?)", ds.DB.Select("id").Where("name LIKE ?", authorName).Table("authors"))
+		}
+		return tx.Find(&books)
+	}, nil, nil, nil, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
+		result := keys[0].Query(ds.DB, nil)
+		if result.Error != nil {
+			return &dataloader.Result{
+				Error: result.Error,
+			}
+		}
+		return &dataloader.Result{
+			Data: books,
+		}
+	}, func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
+		return groupResults
+	})
+	data, err := ds.BatchLoader.Load(ctx, key)()
+	if data != nil {
+		return data.([]*model.Book), err
 	}
-	if queryLimit != nil {
-		tx = tx.Limit(*queryLimit)
-	}
-	if id != nil {
-		tx.Where("id = ?", id)
-	}
-	if title != nil {
-		tx.Where("title LIKE ?", title)
-	}
-	if authorName != nil {
-		tx.Where("author_id = ?", ds.DB.Select("id").Where("name LIKE ?", authorName).Table("author"))
-	}
-	result := tx.Find(&books)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	return books, nil
+	return nil, err
 }
 
 func (ds *DataSource) BookAuthor(ctx context.Context, obj *model.Book) (*model.Author, error) {
@@ -153,125 +168,149 @@ func (ds *DataSource) BookAuthor(ctx context.Context, obj *model.Book) (*model.A
 		fields = append(fields, f.Name)
 	}
 	var authors []*model.Author
-	stmt := ds.DB.Session(&gorm.Session{DryRun: true}).Select(fields).Where("id = ?", obj.AuthorID).Find(&authors).Statement
-	group := stmt.SQL.String()
-	key := &BatchLoaderKey{
-		key:   ds.DB.Dialector.Explain(group, stmt.Vars...),
-		group: group,
-		Param: obj,
-		Find: func(keys []*BatchLoaderKey) *dataloader.Result {
-			ids := make([]int, len(keys))
-			for i, k := range keys {
-				ids[i] = k.Param.(*model.Book).AuthorID
-			}
-			var authors []*model.Author
-			result := ds.DB.Select(fields).Where("id = ?", pq.Array(ids)).Find(&authors)
-			if result.Error != nil {
-				return &dataloader.Result{
-					Error: result.Error,
-				}
-			}
+	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
+		return db.Select(fields).Where("id IN ?", param).Find(&authors)
+	}, func(tx *gorm.DB) *string {
+		g := tx.Statement.SQL.String()
+		return &g
+	}, []interface{}{obj.AuthorID}, obj, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
+		ids := make([]int, len(keys))
+		for i, k := range keys {
+			ids[i] = k.Param.(*model.Book).AuthorID
+		}
+		result := keys[0].Query(ds.DB, ids)
+		if result.Error != nil {
 			return &dataloader.Result{
-				Data: authors,
+				Error: result.Error,
 			}
-		},
-		Filter: func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
-			if groupResults.Error != nil {
-				return groupResults
+		}
+		return &dataloader.Result{
+			Data: authors,
+		}
+	}, func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
+		if groupResults.Error != nil {
+			return groupResults
+		}
+		book := key.Param.(*model.Book)
+		authors := groupResults.Data.([]*model.Author)
+		for _, a := range authors {
+			if a.ID == book.AuthorID {
+				return &dataloader.Result{Data: a}
 			}
-			book := key.Param.(*model.Book)
-			authors := groupResults.Data.([]*model.Author)
-			for _, a := range authors {
-				if a.ID == book.AuthorID {
-					return &dataloader.Result{Data: a}
-				}
-			}
-			return &dataloader.Result{}
-		},
-	}
+		}
+		return &dataloader.Result{}
+	})
 	data, err := ds.BatchLoader.Load(ctx, key)()
-	return data.(*model.Author), err
+	if data != nil {
+		return data.(*model.Author), err
+	}
+	return nil, err
 }
 
 func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) ([]*model.Review, error) {
-	var fields []string
+	fields := []string{"book_id"}
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
-		fields = append(fields, f.Name)
+		if f.Name != "book_id" {
+			fields = append(fields, f.Name)
+		}
+	}
+	type Param struct {
+		bookID      []int
+		queryOffset *int
+		queryLimit  *int
+		minStar     *int
+		maxStar     *int
 	}
 	var reviews []*model.Review
-	tx := ds.DB.Session(&gorm.Session{DryRun: true}).Select(fields).Where("book_id = ?", obj.ID)
-	if queryOffset != nil {
-		tx = tx.Offset(*queryOffset)
+	key := ds.NewBatchLoaderKey(func(db *gorm.DB, _param interface{}) *gorm.DB {
+		param := _param.(*Param)
+		tx := db.Select(fields).Where("book_id IN ?", param.bookID)
+		if queryOffset != nil {
+			tx = tx.Offset(*param.queryOffset)
+		}
+		if queryLimit != nil {
+			tx = tx.Limit(*param.queryLimit)
+		}
+		if minStar != nil {
+			tx = tx.Where("star >= ?", param.minStar)
+		}
+		if maxStar != nil {
+			tx = tx.Where("star <= ?", param.maxStar)
+		}
+		return tx.Find(&reviews)
+	}, func(tx *gorm.DB) *string {
+		g := tx.Statement.SQL.String()
+		return &g
+	}, &Param{
+		bookID:      []int{obj.ID},
+		queryOffset: queryOffset,
+		queryLimit:  queryLimit,
+		minStar:     minStar,
+		maxStar:     maxStar,
+	}, obj, queryOffset, queryLimit, func(keys []*BatchLoaderKey) *dataloader.Result {
+		ids := make([]int, len(keys))
+		for i, k := range keys {
+			ids[i] = k.Param.(*model.Book).ID
+		}
+		result := keys[0].Query(ds.DB, &Param{
+			bookID:      ids,
+			queryOffset: queryOffset,
+			queryLimit:  queryLimit,
+			minStar:     minStar,
+			maxStar:     maxStar,
+		})
+		if result.Error != nil {
+			return &dataloader.Result{
+				Error: result.Error,
+			}
+		}
+		return &dataloader.Result{
+			Data: reviews,
+		}
+	}, func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
+		if groupResults.Error != nil {
+			return groupResults
+		}
+		book := key.Param.(*model.Book)
+		greviews := groupResults.Data.([]*model.Review)
+		var reviews []*model.Review
+		for _, r := range greviews {
+			if r.BookID == book.ID {
+				reviews = append(reviews, r)
+			}
+		}
+		return &dataloader.Result{Data: reviews}
+	})
+	data, err := ds.BatchLoader.Load(ctx, key)()
+	if data != nil {
+		return data.([]*model.Review), err
 	}
-	if queryLimit != nil {
-		tx = tx.Limit(*queryLimit)
+	return nil, err
+}
+
+func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{}) *gorm.DB, groupFn func(tx *gorm.DB) *string, params interface{}, obj interface{}, queryOffset *int, queryLimit *int, find func(keys []*BatchLoaderKey) *dataloader.Result, filter func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result) *BatchLoaderKey {
+	tx := query(ds.DB.Session(&gorm.Session{DryRun: true}), params)
+	var group *string
+	if groupFn != nil {
+		group = groupFn(tx)
 	}
-	if minStar != nil {
-		tx = tx.Where("star >= ?", minStar)
-	}
-	if maxStar != nil {
-		tx = tx.Where("star <= ?", maxStar)
-	}
-	stmt := tx.Find(&reviews).Statement
-	group := stmt.SQL.String()
-	key := &BatchLoaderKey{
-		key:         ds.DB.Dialector.Explain(group, stmt.Vars...),
+	return &BatchLoaderKey{
+		key:         ds.DB.Dialector.Explain(tx.Statement.SQL.String(), tx.Statement.Vars...),
 		group:       group,
 		queryOffset: queryOffset,
 		queryLimit:  queryLimit,
+		Query:       query,
 		Param:       obj,
-		Find: func(keys []*BatchLoaderKey) *dataloader.Result {
-			ids := make([]int, len(keys))
-			for i, k := range keys {
-				ids[i] = k.Param.(*model.Book).ID
-			}
-			var reviews []*model.Review
-			tx := ds.DB.Select(fields).Where("book_id = ?", pq.Array(ids))
-			if queryOffset != nil {
-				tx = tx.Offset(*queryOffset)
-			}
-			if queryLimit != nil {
-				tx = tx.Limit(*queryLimit)
-			}
-			if minStar != nil {
-				tx = tx.Where("star >= ?", minStar)
-			}
-			if maxStar != nil {
-				tx = tx.Where("star <= ?", maxStar)
-			}
-			result := tx.Find(&reviews)
-			if result.Error != nil {
-				return &dataloader.Result{
-					Error: result.Error,
-				}
-			}
-			return &dataloader.Result{
-				Data: reviews,
-			}
-		},
-		Filter: func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
-			if groupResults.Error != nil {
-				return groupResults
-			}
-			book := key.Param.(*model.Book)
-			greviews := groupResults.Data.([]*model.Review)
-			var reviews []*model.Review
-			for _, r := range greviews {
-				if r.BookID == book.ID {
-					reviews = append(reviews, r)
-				}
-			}
-			return &dataloader.Result{Data: reviews}
-		},
+		Find:        find,
+		Filter:      filter,
 	}
-	data, err := ds.BatchLoader.Load(ctx, key)()
-	return data.([]*model.Review), err
 }
 
 func (ds *DataSource) batchLoader(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-	for i, k := range keys {
-		fmt.Printf("BATCH-LOADER %v : [%s] [%s]", i, k.(*BatchLoaderKey).key, k.(*BatchLoaderKey).group)
-	}
+	// for i, k := range keys {
+	// 	key := k.(*BatchLoaderKey)
+	// 	fmt.Printf("BATCH LOADER %v : [%v]  [%v]\n", i, key.group, key.key)
+	// }
 	results := make([]*dataloader.Result, len(keys))
 	keysLen := len(keys)
 	for i := 0; i < keysLen; i++ {
@@ -279,11 +318,11 @@ func (ds *DataSource) batchLoader(ctx context.Context, keys dataloader.Keys) []*
 		if !key.processed {
 			key.idx = i
 			gkeys := []*BatchLoaderKey{key}
-			if key.queryLimit == nil && key.queryOffset == nil {
+			if key.group != nil && key.queryLimit == nil && key.queryOffset == nil {
 				for j := i + 1; j < keysLen; j++ {
 					jkey := keys[j].(*BatchLoaderKey)
 					if !jkey.processed {
-						if key.group == jkey.group && jkey.queryLimit == nil && jkey.queryOffset == nil {
+						if *key.group == *jkey.group && jkey.queryLimit == nil && jkey.queryOffset == nil {
 							jkey.idx = j
 							jkey.processed = true
 							gkeys = append(gkeys, jkey)

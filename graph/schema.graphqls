@@ -18,8 +18,8 @@ type Book {
   title: String!
   author: Author!
   reviews(
-    query_offset: Int = 0
-    query_limit: Int = 10
+    query_offset: Int
+    query_limit: Int
     minStar: Int
     maxStar: Int
   ): [Review!]!

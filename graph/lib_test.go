@@ -4,17 +4,19 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
+	"log"
+	"os"
 	"regexp"
-	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/senomas/gographql/graph/model"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var NoArgs = []driver.Value{}
@@ -26,25 +28,146 @@ func JsonMatch(t *testing.T, expected interface{}, resp interface{}) {
 	assert.Equal(t, string(eJSON), string(rJSON))
 }
 
-type MatchPQArray struct {
-	Value string
+type ArrayIntArgs struct {
+	value map[int64]bool
 }
 
-func (m *MatchPQArray) Match(v driver.Value) bool {
-	txt := v.(string)
-	av := strings.Split(txt[1:len(txt)-1], ",")
-	sort.Slice(av, func(i, j int) bool {
-		return av[i] < av[j]
-	})
-	st := fmt.Sprintf("{%s}", strings.Join(av, ","))
-	return st == m.Value
+func NewArrayIntArgs(args ...int64) *ArrayIntArgs {
+	v := ArrayIntArgs{value: make(map[int64]bool)}
+	for _, a := range args {
+		v.value[a] = true
+	}
+	return &v
+}
+
+func (m *ArrayIntArgs) Match(v driver.Value) bool {
+	for i, unused := range m.value {
+		if i == v.(int64) {
+			if !unused {
+				return false
+			}
+			m.value[i] = true
+			return true
+		}
+	}
+	return false
 }
 
 func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
+	var dsnPostgre *string
+	var gormLogger logger.Interface
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		if pair[0] == "TEST_DB_POSTGRES" {
+			dsnPostgre = &pair[1]
+		} else if pair[0] == "LOGGER" && pair[1] != "" {
+			gormLogger = logger.New(
+				log.New(os.Stdout, "\r\n", log.LstdFlags),
+				logger.Config{
+					SlowThreshold:             time.Second,
+					LogLevel:                  logger.Info,
+					IgnoreRecordNotFoundError: true,
+					Colorful:                  true,
+				},
+			)
+		}
+	}
+
+	if dsnPostgre != nil {
+		if db, err := gorm.Open(postgres.New(postgres.Config{DSN: *dsnPostgre}), &gorm.Config{Logger: gormLogger}); err != nil {
+			return nil, nil, nil, err
+		} else {
+			db.Migrator().DropTable(&model.Author{}, &model.Book{}, &model.Review{})
+			if err := db.AutoMigrate(&model.Author{}, &model.Book{}, &model.Review{}); err != nil {
+				return nil, nil, nil, err
+			}
+
+			tx := db.Begin()
+
+			var author = model.Author{
+				Name: "J.K. Rowling",
+			}
+			if result := tx.Create(&author); result.Error != nil {
+				return nil, nil, nil, err
+			}
+			author = model.Author{
+				Name: "Lord Voldermort",
+			}
+			if result := tx.Create(&author); result.Error != nil {
+				return nil, nil, nil, err
+			}
+
+			var book = model.Book{
+				Title:    "Harry Potter and the Sorcerer's Stone",
+				AuthorID: 1,
+			}
+			if result := tx.Create(&book); result.Error != nil {
+				return nil, nil, nil, err
+			}
+			book = model.Book{
+				Title:    "Harry Potter and the Chamber of Secrets",
+				AuthorID: 1,
+			}
+			if result := tx.Create(&book); result.Error != nil {
+				return nil, nil, nil, err
+			}
+			book = model.Book{
+				Title:    "Harry Potter and the Book of Evil",
+				AuthorID: 2,
+			}
+			if result := tx.Create(&book); result.Error != nil {
+				return nil, nil, nil, err
+			}
+
+			review := model.Review{
+				BookID: 1,
+				Star:   5,
+				Text:   "The Boy Who Live",
+			}
+			if result := tx.Create(&review); result.Error != nil {
+				return nil, nil, nil, err
+			}
+
+			review = model.Review{
+				BookID: 2,
+				Star:   5,
+				Text:   "The Girl Who Kill",
+			}
+			if result := tx.Create(&review); result.Error != nil {
+				return nil, nil, nil, err
+			}
+
+			review = model.Review{
+				BookID: 3,
+				Star:   1,
+				Text:   "Fake Books",
+			}
+			if result := tx.Create(&review); result.Error != nil {
+				return nil, nil, nil, err
+			}
+
+			review = model.Review{
+				BookID: 1,
+				Star:   2,
+				Text:   "The Man With Funny Hat",
+			}
+			if result := tx.Create(&review); result.Error != nil {
+				return nil, nil, nil, err
+			}
+
+			tx.Commit()
+
+			if sqlDB, err := db.DB(); err != nil {
+				return nil, nil, nil, err
+			} else {
+				return sqlDB, db, nil, nil
+			}
+		}
+	}
 	if sqlDB, mock, err := sqlmock.New(); err != nil {
 		return sqlDB, nil, mock, err
 	} else {
-		if db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{}); err != nil {
+		if db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{Logger: gormLogger}); err != nil {
 			return sqlDB, db, mock, err
 		} else {
 			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = $1 AND table_type = $2`)).WithArgs("authors", "BASE TABLE").WillReturnRows(sqlmock.NewRows(

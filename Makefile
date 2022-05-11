@@ -15,13 +15,13 @@ clean:
 	go clean -testcache
 
 test:
-	docker-compose up -d postgres
 	go clean -testcache
 	go test ./... -p 1 -v -failfast
 
-short:
+db:
+	docker-compose up -d postgres
 	go clean -testcache
-	go test ./... -v -failfast -short
+	TEST_DB_POSTGRES="host=localhost user=demo password=password dbname=demo port=5432 sslmode=disable TimeZone=Asia/Jakarta" go test ./... -v -failfast
 
 dummy:
 	go test ./db -v -failfast
