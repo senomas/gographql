@@ -53,7 +53,7 @@ type ComplexityRoot struct {
 	Book struct {
 		Author  func(childComplexity int) int
 		ID      func(childComplexity int) int
-		Reviews func(childComplexity int, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) int
+		Reviews func(childComplexity int, offset *int, limit *int, filter *model.ReviewFilter) int
 		Title   func(childComplexity int) int
 	}
 
@@ -64,8 +64,8 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Authors func(childComplexity int, queryOffset *int, queryLimit *int, id *int, name *string) int
-		Books   func(childComplexity int, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) int
+		Authors func(childComplexity int, offset *int, limit *int, filter *model.AuthorFilter) int
+		Books   func(childComplexity int, offset *int, limit *int, filter *model.BookFilter) int
 	}
 
 	Review struct {
@@ -77,7 +77,7 @@ type ComplexityRoot struct {
 
 type BookResolver interface {
 	Author(ctx context.Context, obj *model.Book) (*model.Author, error)
-	Reviews(ctx context.Context, obj *model.Book, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) ([]*model.Review, error)
+	Reviews(ctx context.Context, obj *model.Book, offset *int, limit *int, filter *model.ReviewFilter) ([]*model.Review, error)
 }
 type MutationResolver interface {
 	CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error)
@@ -85,8 +85,8 @@ type MutationResolver interface {
 	CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error)
 }
 type QueryResolver interface {
-	Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error)
-	Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) ([]*model.Book, error)
+	Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) ([]*model.Author, error)
+	Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) ([]*model.Book, error)
 }
 
 type executableSchema struct {
@@ -142,7 +142,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Book.Reviews(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["minStar"].(*int), args["maxStar"].(*int)), true
+		return e.complexity.Book.Reviews(childComplexity, args["offset"].(*int), args["limit"].(*int), args["filter"].(*model.ReviewFilter)), true
 
 	case "Book.title":
 		if e.complexity.Book.Title == nil {
@@ -197,7 +197,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Authors(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["id"].(*int), args["name"].(*string)), true
+		return e.complexity.Query.Authors(childComplexity, args["offset"].(*int), args["limit"].(*int), args["filter"].(*model.AuthorFilter)), true
 
 	case "Query.books":
 		if e.complexity.Query.Books == nil {
@@ -209,7 +209,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Books(childComplexity, args["query_offset"].(*int), args["query_limit"].(*int), args["id"].(*int), args["title"].(*string), args["authorName"].(*string), args["minStar"].(*int), args["maxStar"].(*int)), true
+		return e.complexity.Query.Books(childComplexity, args["offset"].(*int), args["limit"].(*int), args["filter"].(*model.BookFilter)), true
 
 	case "Review.id":
 		if e.complexity.Review.ID == nil {
@@ -240,9 +240,12 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	rc := graphql.GetOperationContext(ctx)
 	ec := executionContext{rc, e}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputAuthorFilter,
+		ec.unmarshalInputBookFilter,
 		ec.unmarshalInputNewAuthor,
 		ec.unmarshalInputNewBook,
 		ec.unmarshalInputNewReview,
+		ec.unmarshalInputReviewFilter,
 	)
 	first := true
 
@@ -322,30 +325,30 @@ type Book {
   id: Int!
   title: String!
   author: Author!
-  reviews(
-    query_offset: Int
-    query_limit: Int
-    minStar: Int
-    maxStar: Int
-  ): [Review!]!
+  reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
+}
+
+input AuthorFilter {
+  id: Int
+  name: String
+}
+
+input BookFilter {
+  id: Int
+  title: String
+  authorName: String
+  minStar: Int
+  maxStar: Int
+}
+
+input ReviewFilter {
+  minStar: Int
+  maxStar: Int
 }
 
 type Query {
-  authors(
-    query_offset: Int = 0
-    query_limit: Int = 10
-    id: Int
-    name: String
-  ): [Author!]!
-  books(
-    query_offset: Int = 0
-    query_limit: Int = 10
-    id: Int
-    title: String
-    authorName: String
-    minStar: Int
-    maxStar: Int
-  ): [Book!]!
+  authors(offset: Int = 0, limit: Int = 10, filter: AuthorFilter): [Author!]!
+  books(offset: Int = 0, limit: Int = 10, filter: BookFilter): [Book!]!
 }
 
 input NewAuthor {
@@ -365,7 +368,9 @@ input NewReview {
 
 type Mutation {
   createAuthor(input: NewAuthor!): Author!
+
   createBook(input: NewBook!): Book!
+
   createReview(input: NewReview!): Review!
 }
 `, BuiltIn: false},
@@ -380,41 +385,32 @@ func (ec *executionContext) field_Book_reviews_args(ctx context.Context, rawArgs
 	var err error
 	args := map[string]interface{}{}
 	var arg0 *int
-	if tmp, ok := rawArgs["query_offset"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_offset"))
+	if tmp, ok := rawArgs["offset"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
 		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["query_offset"] = arg0
+	args["offset"] = arg0
 	var arg1 *int
-	if tmp, ok := rawArgs["query_limit"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_limit"))
+	if tmp, ok := rawArgs["limit"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
 		arg1, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["query_limit"] = arg1
-	var arg2 *int
-	if tmp, ok := rawArgs["minStar"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
-		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+	args["limit"] = arg1
+	var arg2 *model.ReviewFilter
+	if tmp, ok := rawArgs["filter"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+		arg2, err = ec.unmarshalOReviewFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐReviewFilter(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["minStar"] = arg2
-	var arg3 *int
-	if tmp, ok := rawArgs["maxStar"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
-		arg3, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["maxStar"] = arg3
+	args["filter"] = arg2
 	return args, nil
 }
 
@@ -482,41 +478,32 @@ func (ec *executionContext) field_Query_authors_args(ctx context.Context, rawArg
 	var err error
 	args := map[string]interface{}{}
 	var arg0 *int
-	if tmp, ok := rawArgs["query_offset"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_offset"))
+	if tmp, ok := rawArgs["offset"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
 		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["query_offset"] = arg0
+	args["offset"] = arg0
 	var arg1 *int
-	if tmp, ok := rawArgs["query_limit"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_limit"))
+	if tmp, ok := rawArgs["limit"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
 		arg1, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["query_limit"] = arg1
-	var arg2 *int
-	if tmp, ok := rawArgs["id"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+	args["limit"] = arg1
+	var arg2 *model.AuthorFilter
+	if tmp, ok := rawArgs["filter"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+		arg2, err = ec.unmarshalOAuthorFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthorFilter(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["id"] = arg2
-	var arg3 *string
-	if tmp, ok := rawArgs["name"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-		arg3, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["name"] = arg3
+	args["filter"] = arg2
 	return args, nil
 }
 
@@ -524,68 +511,32 @@ func (ec *executionContext) field_Query_books_args(ctx context.Context, rawArgs 
 	var err error
 	args := map[string]interface{}{}
 	var arg0 *int
-	if tmp, ok := rawArgs["query_offset"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_offset"))
+	if tmp, ok := rawArgs["offset"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
 		arg0, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["query_offset"] = arg0
+	args["offset"] = arg0
 	var arg1 *int
-	if tmp, ok := rawArgs["query_limit"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query_limit"))
+	if tmp, ok := rawArgs["limit"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
 		arg1, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["query_limit"] = arg1
-	var arg2 *int
-	if tmp, ok := rawArgs["id"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-		arg2, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
+	args["limit"] = arg1
+	var arg2 *model.BookFilter
+	if tmp, ok := rawArgs["filter"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+		arg2, err = ec.unmarshalOBookFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐBookFilter(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["id"] = arg2
-	var arg3 *string
-	if tmp, ok := rawArgs["title"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
-		arg3, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["title"] = arg3
-	var arg4 *string
-	if tmp, ok := rawArgs["authorName"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
-		arg4, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["authorName"] = arg4
-	var arg5 *int
-	if tmp, ok := rawArgs["minStar"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
-		arg5, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["minStar"] = arg5
-	var arg6 *int
-	if tmp, ok := rawArgs["maxStar"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
-		arg6, err = ec.unmarshalOInt2ᚖint(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["maxStar"] = arg6
+	args["filter"] = arg2
 	return args, nil
 }
 
@@ -867,7 +818,7 @@ func (ec *executionContext) _Book_reviews(ctx context.Context, field graphql.Col
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["minStar"].(*int), fc.Args["maxStar"].(*int))
+		return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.ReviewFilter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1119,7 +1070,7 @@ func (ec *executionContext) _Query_authors(ctx context.Context, field graphql.Co
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Authors(rctx, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["id"].(*int), fc.Args["name"].(*string))
+		return ec.resolvers.Query().Authors(rctx, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.AuthorFilter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1180,7 +1131,7 @@ func (ec *executionContext) _Query_books(ctx context.Context, field graphql.Coll
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Books(rctx, fc.Args["query_offset"].(*int), fc.Args["query_limit"].(*int), fc.Args["id"].(*int), fc.Args["title"].(*string), fc.Args["authorName"].(*string), fc.Args["minStar"].(*int), fc.Args["maxStar"].(*int))
+		return ec.resolvers.Query().Books(rctx, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.BookFilter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3265,6 +3216,92 @@ func (ec *executionContext) fieldContext___Type_specifiedByURL(ctx context.Conte
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputAuthorFilter(ctx context.Context, obj interface{}) (model.AuthorFilter, error) {
+	var it model.AuthorFilter
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "name":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			it.Name, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputBookFilter(ctx context.Context, obj interface{}) (model.BookFilter, error) {
+	var it model.BookFilter
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "title":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
+			it.Title, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "authorName":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
+			it.AuthorName, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "minStar":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
+			it.MinStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "maxStar":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
+			it.MaxStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputNewAuthor(ctx context.Context, obj interface{}) (model.NewAuthor, error) {
 	var it model.NewAuthor
 	asMap := map[string]interface{}{}
@@ -3349,6 +3386,37 @@ func (ec *executionContext) unmarshalInputNewReview(ctx context.Context, obj int
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
 			it.Text, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputReviewFilter(ctx context.Context, obj interface{}) (model.ReviewFilter, error) {
+	var it model.ReviewFilter
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "minStar":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minStar"))
+			it.MinStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "maxStar":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("maxStar"))
+			it.MaxStar, err = ec.unmarshalOInt2ᚖint(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4468,6 +4536,22 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
+func (ec *executionContext) unmarshalOAuthorFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthorFilter(ctx context.Context, v interface{}) (*model.AuthorFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputAuthorFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOBookFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐBookFilter(ctx context.Context, v interface{}) (*model.BookFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputBookFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -4508,6 +4592,14 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	}
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOReviewFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐReviewFilter(ctx context.Context, v interface{}) (*model.ReviewFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputReviewFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {

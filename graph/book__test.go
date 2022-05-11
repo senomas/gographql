@@ -112,7 +112,7 @@ func TestTodo(t *testing.T) {
 		}
 		var resp respType
 		c.MustPost(`{
-			books(query_limit: 100) {
+			books(limit: 100) {
 				id
 				title
 				author {
@@ -168,7 +168,10 @@ func TestTodo(t *testing.T) {
 		}
 		var resp respType
 		c.MustPost(`{
-			books(title: "%Harry Potter%", authorName: "J.K. Rowling") {
+			books(filter: {
+					title: "%Harry Potter%",
+					authorName: "J.K. Rowling"
+				}) {
 				id
 				title
 				author {
@@ -292,7 +295,7 @@ func TestTodo(t *testing.T) {
 			books {
 				id
 				title
-				reviews(minStar: 3) {
+				reviews(filter: { minStar: 3}) {
 					id
 					star
 					text
@@ -353,7 +356,7 @@ func TestTodo(t *testing.T) {
 		}
 		var resp respType
 		c.MustPost(`{
-			books(title: "%Harry Potter%", minStar: 3) {
+			books(filter: {title: "%Harry Potter%", minStar: 3}) {
 				id
 				title
 			}

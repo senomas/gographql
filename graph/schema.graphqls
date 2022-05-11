@@ -17,30 +17,30 @@ type Book {
   id: Int!
   title: String!
   author: Author!
-  reviews(
-    query_offset: Int
-    query_limit: Int
-    minStar: Int
-    maxStar: Int
-  ): [Review!]!
+  reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
+}
+
+input AuthorFilter {
+  id: Int
+  name: String
+}
+
+input BookFilter {
+  id: Int
+  title: String
+  authorName: String
+  minStar: Int
+  maxStar: Int
+}
+
+input ReviewFilter {
+  minStar: Int
+  maxStar: Int
 }
 
 type Query {
-  authors(
-    query_offset: Int = 0
-    query_limit: Int = 10
-    id: Int
-    name: String
-  ): [Author!]!
-  books(
-    query_offset: Int = 0
-    query_limit: Int = 10
-    id: Int
-    title: String
-    authorName: String
-    minStar: Int
-    maxStar: Int
-  ): [Book!]!
+  authors(offset: Int = 0, limit: Int = 10, filter: AuthorFilter): [Author!]!
+  books(offset: Int = 0, limit: Int = 10, filter: BookFilter): [Book!]!
 }
 
 input NewAuthor {
@@ -60,6 +60,8 @@ input NewReview {
 
 type Mutation {
   createAuthor(input: NewAuthor!): Author!
+
   createBook(input: NewBook!): Book!
+
   createReview(input: NewReview!): Review!
 }

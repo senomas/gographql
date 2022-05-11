@@ -14,8 +14,8 @@ func (r *bookResolver) Author(ctx context.Context, obj *model.Book) (*model.Auth
 	return ctx.Value(Context_DataSource).(*DataSource).BookAuthor(ctx, obj)
 }
 
-func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) ([]*model.Review, error) {
-	return ctx.Value(Context_DataSource).(*DataSource).BookReviews(ctx, obj, queryOffset, queryLimit, minStar, maxStar)
+func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book, offset *int, limit *int, filter *model.ReviewFilter) ([]*model.Review, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).BookReviews(ctx, obj, offset, limit, filter)
 }
 
 func (r *mutationResolver) CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error) {
@@ -30,12 +30,12 @@ func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewRevi
 	return ctx.Value(Context_DataSource).(*DataSource).CreateReview(ctx, input)
 }
 
-func (r *queryResolver) Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error) {
-	return ctx.Value(Context_DataSource).(*DataSource).Authors(ctx, queryOffset, queryLimit, id, name)
+func (r *queryResolver) Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) ([]*model.Author, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).Authors(ctx, offset, limit, filter)
 }
 
-func (r *queryResolver) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) ([]*model.Book, error) {
-	return ctx.Value(Context_DataSource).(*DataSource).Books(ctx, queryOffset, queryLimit, id, title, authorName, minStar, maxStar)
+func (r *queryResolver) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) ([]*model.Book, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).Books(ctx, offset, limit, filter)
 }
 
 // Book returns generated.BookResolver implementation.

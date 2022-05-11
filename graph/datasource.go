@@ -105,7 +105,7 @@ func (ds *DataSource) CreateReview(ctx context.Context, input model.NewReview) (
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
 
-func (ds *DataSource) Authors(ctx context.Context, queryOffset *int, queryLimit *int, id *int, name *string) ([]*model.Author, error) {
+func (ds *DataSource) Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) ([]*model.Author, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		fields = append(fields, f.Name)
@@ -119,7 +119,7 @@ func (ds *DataSource) Authors(ctx context.Context, queryOffset *int, queryLimit 
 	return authors, nil
 }
 
-func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *int, id *int, title *string, authorName *string, minStar *int, maxStar *int) ([]*model.Book, error) {
+func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) ([]*model.Book, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		if f.Name == "author" {
@@ -133,29 +133,31 @@ func (ds *DataSource) Books(ctx context.Context, queryOffset *int, queryLimit *i
 	var books []*model.Book
 	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
 		tx := db.Select(fields)
-		if queryOffset != nil {
-			tx = tx.Offset(*queryOffset)
+		if offset != nil {
+			tx = tx.Offset(*offset)
 		}
-		if queryLimit != nil {
-			tx = tx.Limit(*queryLimit)
+		if limit != nil {
+			tx = tx.Limit(*limit)
 		}
-		if id != nil {
-			tx.Where("books.id = ?", id)
-		}
-		if title != nil {
-			tx.Where("books.title LIKE ?", title)
-		}
-		if authorName != nil {
-			tx.Where("author_id = (?)", ds.DB.Select("id").Where("name LIKE ?", authorName).Table("authors"))
-		}
-		if minStar != nil || maxStar != nil {
-			tx.Distinct()
-			tx.Joins("JOIN reviews ON books.id = reviews.book_id")
-			if minStar != nil {
-				tx.Where("reviews.star >= ?", minStar)
+		if filter != nil {
+			if filter.ID != nil {
+				tx.Where("books.id = ?", filter.ID)
 			}
-			if maxStar != nil {
-				tx.Where("reviews.star <= ?", maxStar)
+			if filter.Title != nil {
+				tx.Where("books.title LIKE ?", filter.Title)
+			}
+			if filter.AuthorName != nil {
+				tx.Where("author_id = (?)", ds.DB.Select("id").Where("name LIKE ?", filter.AuthorName).Table("authors"))
+			}
+			if filter.MinStar != nil || filter.MaxStar != nil {
+				tx.Distinct()
+				tx.Joins("JOIN reviews ON books.id = reviews.book_id")
+				if filter.MinStar != nil {
+					tx.Where("reviews.star >= ?", filter.MinStar)
+				}
+				if filter.MaxStar != nil {
+					tx.Where("reviews.star <= ?", filter.MaxStar)
+				}
 			}
 		}
 		return tx.Find(&books)
@@ -224,7 +226,7 @@ func (ds *DataSource) BookAuthor(ctx context.Context, obj *model.Book) (*model.A
 	return nil, err
 }
 
-func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, queryOffset *int, queryLimit *int, minStar *int, maxStar *int) ([]*model.Review, error) {
+func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, offset *int, limit *int, filter *model.ReviewFilter) ([]*model.Review, error) {
 	fields := []string{"book_id"}
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		if f.Name != "book_id" {
@@ -232,49 +234,48 @@ func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, queryOff
 		}
 	}
 	type Param struct {
-		bookID      []int
-		queryOffset *int
-		queryLimit  *int
-		minStar     *int
-		maxStar     *int
+		bookID []int
+		offset *int
+		limit  *int
+		filter *model.ReviewFilter
 	}
 	var reviews []*model.Review
 	key := ds.NewBatchLoaderKey(func(db *gorm.DB, _param interface{}) *gorm.DB {
 		param := _param.(*Param)
 		tx := db.Select(fields).Where("book_id IN ?", param.bookID)
-		if queryOffset != nil {
-			tx = tx.Offset(*param.queryOffset)
+		if param.offset != nil {
+			tx = tx.Offset(*param.offset)
 		}
-		if queryLimit != nil {
-			tx = tx.Limit(*param.queryLimit)
+		if param.limit != nil {
+			tx = tx.Limit(*param.limit)
 		}
-		if minStar != nil {
-			tx = tx.Where("star >= ?", param.minStar)
-		}
-		if maxStar != nil {
-			tx = tx.Where("star <= ?", param.maxStar)
+		if param.filter != nil {
+			if param.filter.MinStar != nil {
+				tx = tx.Where("star >= ?", param.filter.MinStar)
+			}
+			if param.filter.MaxStar != nil {
+				tx = tx.Where("star <= ?", param.filter.MaxStar)
+			}
 		}
 		return tx.Find(&reviews)
 	}, func(tx *gorm.DB) *string {
 		g := tx.Statement.SQL.String()
 		return &g
 	}, &Param{
-		bookID:      []int{obj.ID},
-		queryOffset: queryOffset,
-		queryLimit:  queryLimit,
-		minStar:     minStar,
-		maxStar:     maxStar,
-	}, obj, queryOffset, queryLimit, func(keys []*BatchLoaderKey) *dataloader.Result {
+		bookID: []int{obj.ID},
+		offset: offset,
+		limit:  limit,
+		filter: filter,
+	}, obj, offset, limit, func(keys []*BatchLoaderKey) *dataloader.Result {
 		ids := make([]int, len(keys))
 		for i, k := range keys {
 			ids[i] = k.Param.(*model.Book).ID
 		}
 		result := keys[0].Query(ds.DB, &Param{
-			bookID:      ids,
-			queryOffset: queryOffset,
-			queryLimit:  queryLimit,
-			minStar:     minStar,
-			maxStar:     maxStar,
+			bookID: ids,
+			offset: offset,
+			limit:  limit,
+			filter: filter,
 		})
 		if result.Error != nil {
 			return &dataloader.Result{
