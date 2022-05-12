@@ -656,7 +656,7 @@ func TestTodo(t *testing.T) {
 		}, &resp)
 	})
 
-	t.Run("find update books", func(t *testing.T) {
+	t.Run("find updated books", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
 			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(4))
@@ -846,7 +846,7 @@ func TestTodo(t *testing.T) {
 		}, &resp)
 	})
 
-	t.Run("find delete books", func(t *testing.T) {
+	t.Run("find deleted books", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
 			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))

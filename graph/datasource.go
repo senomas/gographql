@@ -24,16 +24,16 @@ type DataSource struct {
 }
 
 type BatchLoaderKey struct {
-	idx         int
-	key         string
-	group       *string
-	queryOffset *int
-	queryLimit  *int
-	Param       interface{}
-	processed   bool
-	Query       func(db *gorm.DB, params interface{}) *gorm.DB
-	Find        func(keys []*BatchLoaderKey) *dataloader.Result
-	Filter      func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result
+	idx       int
+	key       string
+	group     *string
+	Param     interface{}
+	processed bool
+	Query     func(db *gorm.DB, params interface{}) *gorm.DB
+	Find      func(keys []*BatchLoaderKey) *dataloader.Result
+	Offset    *int
+	Limit     *int
+	Filter    func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result
 }
 
 func (d *BatchLoaderKey) String() string {
@@ -485,31 +485,26 @@ func (ds *DataSource) ReviewBook(ctx context.Context, obj *model.Review) (*model
 	return nil, err
 }
 
-func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{}) *gorm.DB, groupFn func(tx *gorm.DB) *string, params interface{}, obj interface{}, queryOffset *int, queryLimit *int, find func(keys []*BatchLoaderKey) *dataloader.Result, filter func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result) *BatchLoaderKey {
+func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{}) *gorm.DB, groupFn func(tx *gorm.DB) *string, params interface{}, obj interface{}, offset *int, limit *int, find func(keys []*BatchLoaderKey) *dataloader.Result, filter func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result) *BatchLoaderKey {
 	tx := query(ds.DB.Session(&gorm.Session{DryRun: true}), params)
 	key := ds.DB.Dialector.Explain(tx.Statement.SQL.String(), tx.Statement.Vars...)
 	var group *string
 	if groupFn != nil {
 		group = groupFn(tx)
 	}
-	fmt.Printf("KEY: %s\n", key)
 	return &BatchLoaderKey{
-		key:         key,
-		group:       group,
-		queryOffset: queryOffset,
-		queryLimit:  queryLimit,
-		Query:       query,
-		Param:       obj,
-		Find:        find,
-		Filter:      filter,
+		key:    key,
+		group:  group,
+		Query:  query,
+		Param:  obj,
+		Find:   find,
+		Offset: offset,
+		Limit:  limit,
+		Filter: filter,
 	}
 }
 
 func (ds *DataSource) batchLoader(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-	// for i, k := range keys {
-	// 	key := k.(*BatchLoaderKey)
-	// 	fmt.Printf("BATCH LOADER %v : [%v]  [%v]\n", i, key.group, key.key)
-	// }
 	results := make([]*dataloader.Result, len(keys))
 	keysLen := len(keys)
 	for i := 0; i < keysLen; i++ {
@@ -517,11 +512,11 @@ func (ds *DataSource) batchLoader(ctx context.Context, keys dataloader.Keys) []*
 		if !key.processed {
 			key.idx = i
 			gkeys := []*BatchLoaderKey{key}
-			if key.group != nil && key.queryLimit == nil && key.queryOffset == nil {
+			if key.group != nil && key.Limit == nil && key.Offset == nil {
 				for j := i + 1; j < keysLen; j++ {
 					jkey := keys[j].(*BatchLoaderKey)
 					if !jkey.processed {
-						if *key.group == *jkey.group && jkey.queryLimit == nil && jkey.queryOffset == nil {
+						if *key.group == *jkey.group && jkey.Limit == nil && jkey.Offset == nil {
 							jkey.idx = j
 							jkey.processed = true
 							gkeys = append(gkeys, jkey)
