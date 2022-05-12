@@ -38,11 +38,11 @@ func (r *mutationResolver) CreateReview(ctx context.Context, input model.NewRevi
 	return ctx.Value(Context_DataSource).(*DataSource).CreateReview(ctx, input)
 }
 
-func (r *queryResolver) Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) ([]*model.Author, error) {
+func (r *queryResolver) Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) (*model.AuthorList, error) {
 	return ctx.Value(Context_DataSource).(*DataSource).Authors(ctx, offset, limit, filter)
 }
 
-func (r *queryResolver) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) ([]*model.Book, error) {
+func (r *queryResolver) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) (*model.BookList, error) {
 	return ctx.Value(Context_DataSource).(*DataSource).Books(ctx, offset, limit, filter)
 }
 

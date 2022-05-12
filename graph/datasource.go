@@ -9,6 +9,7 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/graph-gophers/dataloader"
 	"github.com/senomas/gographql/graph/model"
+	"github.com/vektah/gqlparser/v2/ast"
 	"gorm.io/gorm"
 )
 
@@ -172,23 +173,75 @@ func (ds *DataSource) CreateReview(ctx context.Context, input model.NewReview) (
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
 
-func (ds *DataSource) Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) ([]*model.Author, error) {
+func (ds *DataSource) Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) (*model.AuthorList, error) {
 	var fields []string
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		fields = append(fields, f.Name)
 	}
 	var authors []*model.Author
-	result := ds.DB.Select(fields).Find(&authors)
+	var count int64
+	result := ds.DB.Select(fields).Find(&authors).Count(&count)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
-	return authors, nil
+	return &model.AuthorList{List: authors, Count: int(count)}, nil
 }
 
-func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) ([]*model.Book, error) {
+type Field struct {
+	Name  string
+	Path  string
+	Field *ast.Field
+}
+
+func getFields(set ast.SelectionSet, path string, fields []*Field) []*Field {
+	for _, s := range set {
+		switch v := s.(type) {
+		case *ast.Field:
+			npath := path + v.Name
+			fields = append(fields, &Field{
+				Name:  v.Name,
+				Path:  npath,
+				Field: v,
+			})
+		}
+	}
+	return fields
+}
+
+func getRootField(set ast.SelectionSet, root string, path string, fields []*Field) []*Field {
+	for _, s := range set {
+		switch v := s.(type) {
+		case *ast.Field:
+			npath := path + v.Name
+			if npath == root {
+				return getFields(v.SelectionSet, "", fields)
+			}
+			if v.SelectionSet != nil {
+				fields = getRootField(v.SelectionSet, root, npath+".", fields)
+			}
+		}
+	}
+	return fields
+}
+
+func GetFields(ctx context.Context, root string) []*Field {
+	if root == "" {
+		return getFields(graphql.GetFieldContext(ctx).Field.SelectionSet, "", []*Field{})
+	} else {
+		return getRootField(graphql.GetFieldContext(ctx).Field.SelectionSet, root, "", []*Field{})
+	}
+}
+
+func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) (*model.BookList, error) {
 	var fields []string
-	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
+	needCount := false
+	for _, f := range GetFields(ctx, "") {
+		if f.Name == "count" {
+			needCount = true
+		}
+	}
+	for _, f := range GetFields(ctx, "list") {
 		if f.Name == "author" {
 			fields = append(fields, "books.author_id")
 		} else if f.Name == "reviews" {
@@ -198,14 +251,9 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 		}
 	}
 	var books []*model.Book
+	var count int64
 	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
 		tx := db.Select(fields)
-		if offset != nil {
-			tx = tx.Offset(*offset)
-		}
-		if limit != nil {
-			tx = tx.Limit(*limit)
-		}
 		if filter != nil {
 			if filter.ID != nil {
 				tx.Where("books.id = ?", filter.ID)
@@ -229,6 +277,15 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 				}
 			}
 		}
+		if needCount {
+			tx.Table("books").Count(&count)
+		}
+		if offset != nil {
+			tx = tx.Offset(*offset)
+		}
+		if limit != nil {
+			tx = tx.Limit(*limit)
+		}
 		return tx.Find(&books)
 	}, nil, nil, nil, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
 		result := keys[0].Query(ds.DB, nil)
@@ -238,14 +295,14 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 			}
 		}
 		return &dataloader.Result{
-			Data: books,
+			Data: &model.BookList{List: books, Count: int(count)},
 		}
 	}, func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
 		return groupResults
 	})
 	data, err := ds.BatchLoader.Load(ctx, key)()
 	if data != nil {
-		return data.([]*model.Book), err
+		return data.(*model.BookList), err
 	}
 	return nil, err
 }
@@ -430,12 +487,14 @@ func (ds *DataSource) ReviewBook(ctx context.Context, obj *model.Review) (*model
 
 func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{}) *gorm.DB, groupFn func(tx *gorm.DB) *string, params interface{}, obj interface{}, queryOffset *int, queryLimit *int, find func(keys []*BatchLoaderKey) *dataloader.Result, filter func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result) *BatchLoaderKey {
 	tx := query(ds.DB.Session(&gorm.Session{DryRun: true}), params)
+	key := ds.DB.Dialector.Explain(tx.Statement.SQL.String(), tx.Statement.Vars...)
 	var group *string
 	if groupFn != nil {
 		group = groupFn(tx)
 	}
+	fmt.Printf("KEY: %s\n", key)
 	return &BatchLoaderKey{
-		key:         ds.DB.Dialector.Explain(tx.Statement.SQL.String(), tx.Statement.Vars...),
+		key:         key,
 		group:       group,
 		queryOffset: queryOffset,
 		queryLimit:  queryLimit,

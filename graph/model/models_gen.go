@@ -16,6 +16,11 @@ type AuthorFilter struct {
 	Name *FilterText `json:"name"`
 }
 
+type AuthorList struct {
+	List  []*Author `json:"list"`
+	Count int       `json:"count"`
+}
+
 type Book struct {
 	ID       int       `json:"id" gorm:"primaryKey"`
 	Title    string    `json:"title" gorm:"unique"`
@@ -27,8 +32,13 @@ type Book struct {
 type BookFilter struct {
 	ID         *int            `json:"id"`
 	Title      *FilterText     `json:"title"`
-	AuthorName *FilterText     `json:"authorName"`
+	AuthorName *FilterText     `json:"author_name"`
 	Star       *FilterIntRange `json:"star"`
+}
+
+type BookList struct {
+	List  []*Book `json:"list"`
+	Count int     `json:"count"`
 }
 
 type FilterIntRange struct {
@@ -51,7 +61,7 @@ type NewBook struct {
 }
 
 type NewReview struct {
-	BookID int    `json:"bookId"`
+	BookID int    `json:"book_id"`
 	Star   int    `json:"star"`
 	Text   string `json:"text"`
 }
@@ -71,7 +81,7 @@ type ReviewFilter struct {
 type UpdateBook struct {
 	ID         int     `json:"id"`
 	Title      *string `json:"title"`
-	AuthorName *string `json:"authorName"`
+	AuthorName *string `json:"author_name"`
 }
 
 type FilterTextOp string
