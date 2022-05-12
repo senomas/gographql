@@ -42,6 +42,7 @@ func TestTodo(t *testing.T) {
 	t.Run("find books", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
@@ -52,55 +53,61 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
 			books {
-				id
-				title
-				author {
+				count
+				list {
 					id
-					name
+					title
+					author {
+						id
+						name
+					}
 				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+			Books: model.BookList{
+				Count: 3,
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    3,
-					Title: "Harry Potter and the Book of Evil",
-					Author: &model.Author{
-						ID:   2,
-						Name: "Lord Voldermort",
+					{
+						ID:    3,
+						Title: "Harry Potter and the Book of Evil",
+						Author: &model.Author{
+							ID:   2,
+							Name: "Lord Voldermort",
+						},
 					},
 				},
 			},
 		}, &resp)
 	})
 
-	t.Run("find books with limit", func(t *testing.T) {
+	t.Run("find book limit 1", func(t *testing.T) {
 		if mock != nil {
-			authorArgs := NewArrayIntArgs(1, 2)
-			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 100`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
-			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 1`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1))
+			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling"))
 		}
 		defer func() {
 			if mock != nil {
@@ -109,44 +116,34 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
-			books(limit: 100) {
-				id
-				title
-				author {
+			books(limit: 1) {
+				count
+				list {
 					id
-					name
+					title
+					author {
+						id
+						name
+					}
 				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
-					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
-					},
-				},
-				{
-					ID:    3,
-					Title: "Harry Potter and the Book of Evil",
-					Author: &model.Author{
-						ID:   2,
-						Name: "Lord Voldermort",
+			Books: model.BookList{
+				Count: 3,
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
 				},
 			},
@@ -155,6 +152,7 @@ func TestTodo(t *testing.T) {
 
 	t.Run("find books filter by title and author_name", func(t *testing.T) {
 		if mock != nil {
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books" WHERE books.title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name = $2)`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" WHERE books.title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name = $2) LIMIT 10`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
@@ -165,7 +163,7 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
@@ -178,32 +176,39 @@ func TestTodo(t *testing.T) {
 						op: EQ
 						value: "J.K. Rowling"
 					}
-				}) {
-				id
-				title
-				author {
+				}
+			) {
+				count
+				list {
 					id
-					name
+					title
+					author {
+						id
+						name
+					}
 				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+			Books: model.BookList{
+				Count: 2,
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
 				},
 			},
@@ -213,6 +218,7 @@ func TestTodo(t *testing.T) {
 	t.Run("find books + reviews", func(t *testing.T) {
 		if mock != nil {
 			reviewArgs := NewArrayIntArgs(1, 2, 3)
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil"))
 			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3)`)).WithArgs(reviewArgs, reviewArgs, reviewArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill").AddRow(3, 3, 1, "Fake Books").AddRow(4, 1, 3, "The Man With Funny Hat"))
 		}
@@ -223,11 +229,13 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
-			books {
+		books {
+			count
+			list {
 				id
 				title
 				reviews {
@@ -236,45 +244,49 @@ func TestTodo(t *testing.T) {
 					text
 				}
 			}
-		}`, &resp, addContext(graph.NewDataSource(db)))
+		}
+	}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Reviews: []*model.Review{
-						{
-							ID:   1,
-							Star: 5,
-							Text: "The Boy Who Live",
-						},
-						{
-							ID:   4,
-							Star: 3,
-							Text: "The Man With Funny Hat",
-						},
-					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Reviews: []*model.Review{
-						{
-							ID:   2,
-							Star: 5,
-							Text: "The Girl Who Kill",
+			Books: model.BookList{
+				Count: 3,
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Reviews: []*model.Review{
+							{
+								ID:   1,
+								Star: 5,
+								Text: "The Boy Who Live",
+							},
+							{
+								ID:   4,
+								Star: 3,
+								Text: "The Man With Funny Hat",
+							},
 						},
 					},
-				},
-				{
-					ID:    3,
-					Title: "Harry Potter and the Book of Evil",
-					Reviews: []*model.Review{
-						{
-							ID:   3,
-							Star: 1,
-							Text: "Fake Books",
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+						Reviews: []*model.Review{
+							{
+								ID:   2,
+								Star: 5,
+								Text: "The Girl Who Kill",
+							},
+						},
+					},
+					{
+						ID:    3,
+						Title: "Harry Potter and the Book of Evil",
+						Reviews: []*model.Review{
+							{
+								ID:   3,
+								Star: 1,
+								Text: "Fake Books",
+							},
 						},
 					},
 				},
@@ -295,54 +307,58 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
 			books {
-				id
-				title
-				reviews(filter: { star: { min: 3}}) {
+				list {
 					id
-					star
-					text
+					title
+					reviews(filter: { star: { min: 3}}) {
+						id
+						star
+						text
+					}
 				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Reviews: []*model.Review{
-						{
-							ID:   1,
-							Star: 5,
-							Text: "The Boy Who Live",
-						},
-						{
-							ID:   4,
-							Star: 3,
-							Text: "The Man With Funny Hat",
-						},
-					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Reviews: []*model.Review{
-						{
-							ID:   2,
-							Star: 5,
-							Text: "The Girl Who Kill",
+			Books: model.BookList{
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Reviews: []*model.Review{
+							{
+								ID:   1,
+								Star: 5,
+								Text: "The Boy Who Live",
+							},
+							{
+								ID:   4,
+								Star: 3,
+								Text: "The Man With Funny Hat",
+							},
 						},
 					},
-				},
-				{
-					ID:      3,
-					Title:   "Harry Potter and the Book of Evil",
-					Reviews: []*model.Review{},
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+						Reviews: []*model.Review{
+							{
+								ID:   2,
+								Star: 5,
+								Text: "The Girl Who Kill",
+							},
+						},
+					},
+					{
+						ID:      3,
+						Title:   "Harry Potter and the Book of Evil",
+						Reviews: []*model.Review{},
+					},
 				},
 			},
 		}, &resp)
@@ -359,25 +375,29 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
 			books(filter: {title: {op: LIKE, value: "%Harry Potter%"}, star: {min: 3}}) {
-				id
-				title
+				list {
+					id
+					title
+				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
+			Books: model.BookList{
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+					},
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+					},
 				},
 			},
 		}, &resp)
@@ -394,7 +414,7 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 
 		ctx := addContext(graph.NewDataSource(db))
@@ -405,24 +425,28 @@ func TestTodo(t *testing.T) {
 			var resp respType
 			c.MustPost(`{
 			books {
-				id
-				title
+				list {
+					id
+					title
+				}
 			}
 		}`, &resp, ctx)
 
 			JsonMatch(t, &respType{
-				Books: []model.Book{
-					{
-						ID:    1,
-						Title: "Harry Potter and the Sorcerer's Stone",
-					},
-					{
-						ID:    2,
-						Title: "Harry Potter and the Chamber of Secrets",
-					},
-					{
-						ID:    3,
-						Title: "Harry Potter and the Book of Evil",
+				Books: model.BookList{
+					List: []*model.Book{
+						{
+							ID:    1,
+							Title: "Harry Potter and the Sorcerer's Stone",
+						},
+						{
+							ID:    2,
+							Title: "Harry Potter and the Chamber of Secrets",
+						},
+						{
+							ID:    3,
+							Title: "Harry Potter and the Book of Evil",
+						},
 					},
 				},
 			}, &resp)
@@ -635,6 +659,7 @@ func TestTodo(t *testing.T) {
 	t.Run("find update books", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(4))
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2).AddRow(4, "Harry Potter and the Evil Book", 2))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
@@ -645,52 +670,58 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
 			books {
-				id
-				title
-				author {
+				count
+				list {
 					id
-					name
+					title
+					author {
+						id
+						name
+					}
 				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+			Books: model.BookList{
+				Count: 4,
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    3,
-					Title: "Harry Potter and the Book of Evil",
-					Author: &model.Author{
-						ID:   2,
-						Name: "Lord Voldermort",
+					{
+						ID:    3,
+						Title: "Harry Potter and the Book of Evil",
+						Author: &model.Author{
+							ID:   2,
+							Name: "Lord Voldermort",
+						},
 					},
-				},
-				{
-					ID:    4,
-					Title: "Harry Potter and the Evil Book",
-					Author: &model.Author{
-						ID:   2,
-						Name: "Lord Voldermort",
+					{
+						ID:    4,
+						Title: "Harry Potter and the Evil Book",
+						Author: &model.Author{
+							ID:   2,
+							Name: "Lord Voldermort",
+						},
 					},
 				},
 			},
@@ -818,6 +849,7 @@ func TestTodo(t *testing.T) {
 	t.Run("find delete books", func(t *testing.T) {
 		if mock != nil {
 			authorArgs := NewArrayIntArgs(1, 2)
+			mock.ExpectQuery(QuoteMeta(`SELECT count(*) FROM "books"`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1).AddRow(3, "Harry Potter and the Book of Evil", 2))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1,$2)`)).WithArgs(authorArgs, authorArgs).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
 		}
@@ -828,44 +860,50 @@ func TestTodo(t *testing.T) {
 		}()
 
 		type respType struct {
-			Books []model.Book
+			Books model.BookList
 		}
 		var resp respType
 		c.MustPost(`{
 			books {
-				id
-				title
-				author {
+				count
+				list {
 					id
-					name
+					title
+					author {
+						id
+						name
+					}
 				}
 			}
 		}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
-			Books: []model.Book{
-				{
-					ID:    1,
-					Title: "Harry Potter and the Sorcerer's Stone",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+			Books: model.BookList{
+				Count: 3,
+				List: []*model.Book{
+					{
+						ID:    1,
+						Title: "Harry Potter and the Sorcerer's Stone",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    2,
-					Title: "Harry Potter and the Chamber of Secrets",
-					Author: &model.Author{
-						ID:   1,
-						Name: "J.K. Rowling",
+					{
+						ID:    2,
+						Title: "Harry Potter and the Chamber of Secrets",
+						Author: &model.Author{
+							ID:   1,
+							Name: "J.K. Rowling",
+						},
 					},
-				},
-				{
-					ID:    3,
-					Title: "Harry Potter and the Book of Evil",
-					Author: &model.Author{
-						ID:   2,
-						Name: "Lord Voldermort",
+					{
+						ID:    3,
+						Title: "Harry Potter and the Book of Evil",
+						Author: &model.Author{
+							ID:   2,
+							Name: "Lord Voldermort",
+						},
 					},
 				},
 			},

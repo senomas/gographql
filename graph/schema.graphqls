@@ -22,6 +22,11 @@ type Author {
   name: String!
 }
 
+type AuthorList {
+  list: [Author!]!
+  count: Int!
+}
+
 type Review {
   id: Int!
   star: Int!
@@ -34,6 +39,11 @@ type Book {
   title: String!
   author: Author!
   reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
+}
+
+type BookList {
+  list: [Book!]!
+  count: Int!
 }
 
 input AuthorFilter {
@@ -53,8 +63,8 @@ input ReviewFilter {
 }
 
 type Query {
-  authors(offset: Int = 0, limit: Int = 10, filter: AuthorFilter): [Author!]!
-  books(offset: Int = 0, limit: Int = 10, filter: BookFilter): [Book!]!
+  authors(offset: Int = 0, limit: Int = 10, filter: AuthorFilter): AuthorList!
+  books(offset: Int = 0, limit: Int = 10, filter: BookFilter): BookList!
 }
 
 input NewAuthor {
