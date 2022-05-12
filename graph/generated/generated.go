@@ -39,6 +39,7 @@ type ResolverRoot interface {
 	Book() BookResolver
 	Mutation() MutationResolver
 	Query() QueryResolver
+	Review() ReviewResolver
 }
 
 type DirectiveRoot struct {
@@ -71,6 +72,7 @@ type ComplexityRoot struct {
 	}
 
 	Review struct {
+		Book func(childComplexity int) int
 		ID   func(childComplexity int) int
 		Star func(childComplexity int) int
 		Text func(childComplexity int) int
@@ -91,6 +93,9 @@ type MutationResolver interface {
 type QueryResolver interface {
 	Authors(ctx context.Context, offset *int, limit *int, filter *model.AuthorFilter) ([]*model.Author, error)
 	Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) ([]*model.Book, error)
+}
+type ReviewResolver interface {
+	Book(ctx context.Context, obj *model.Review) (*model.Book, error)
 }
 
 type executableSchema struct {
@@ -239,6 +244,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Books(childComplexity, args["offset"].(*int), args["limit"].(*int), args["filter"].(*model.BookFilter)), true
 
+	case "Review.book":
+		if e.complexity.Review.Book == nil {
+			break
+		}
+
+		return e.complexity.Review.Book(childComplexity), true
+
 	case "Review.id":
 		if e.complexity.Review.ID == nil {
 			break
@@ -365,6 +377,7 @@ type Review {
   id: Int!
   star: Int!
   text: String!
+  book: Book!
 }
 
 type Book {
@@ -382,7 +395,7 @@ input AuthorFilter {
 input BookFilter {
   id: Int
   title: FilterText
-  authorName: FilterText
+  author_name: FilterText
   star: FilterIntRange
 }
 
@@ -407,11 +420,11 @@ input NewBook {
 input UpdateBook {
   id: Int!
   title: String
-  authorName: String
+  author_name: String
 }
 
 input NewReview {
-  bookId: Int!
+  book_id: Int!
   star: Int!
   text: String!
 }
@@ -931,6 +944,8 @@ func (ec *executionContext) fieldContext_Book_reviews(ctx context.Context, field
 				return ec.fieldContext_Review_star(ctx, field)
 			case "text":
 				return ec.fieldContext_Review_text(ctx, field)
+			case "book":
+				return ec.fieldContext_Review_book(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Review", field.Name)
 		},
@@ -1250,6 +1265,8 @@ func (ec *executionContext) fieldContext_Mutation_createReview(ctx context.Conte
 				return ec.fieldContext_Review_star(ctx, field)
 			case "text":
 				return ec.fieldContext_Review_text(ctx, field)
+			case "book":
+				return ec.fieldContext_Review_book(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Review", field.Name)
 		},
@@ -1650,6 +1667,60 @@ func (ec *executionContext) fieldContext_Review_text(ctx context.Context, field 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Review_book(ctx context.Context, field graphql.CollectedField, obj *model.Review) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Review_book(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Review().Book(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Book)
+	fc.Result = res
+	return ec.marshalNBook2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐBook(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Review_book(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Review",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Book_id(ctx, field)
+			case "title":
+				return ec.fieldContext_Book_title(ctx, field)
+			case "author":
+				return ec.fieldContext_Book_author(ctx, field)
+			case "reviews":
+				return ec.fieldContext_Book_reviews(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Book", field.Name)
 		},
 	}
 	return fc, nil
@@ -3484,10 +3555,10 @@ func (ec *executionContext) unmarshalInputBookFilter(ctx context.Context, obj in
 			if err != nil {
 				return it, err
 			}
-		case "authorName":
+		case "author_name":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("author_name"))
 			it.AuthorName, err = ec.unmarshalOFilterText2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐFilterText(ctx, v)
 			if err != nil {
 				return it, err
@@ -3631,10 +3702,10 @@ func (ec *executionContext) unmarshalInputNewReview(ctx context.Context, obj int
 
 	for k, v := range asMap {
 		switch k {
-		case "bookId":
+		case "book_id":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("bookId"))
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("book_id"))
 			it.BookID, err = ec.unmarshalNInt2int(ctx, v)
 			if err != nil {
 				return it, err
@@ -3709,10 +3780,10 @@ func (ec *executionContext) unmarshalInputUpdateBook(ctx context.Context, obj in
 			if err != nil {
 				return it, err
 			}
-		case "authorName":
+		case "author_name":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("author_name"))
 			it.AuthorName, err = ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
@@ -4019,22 +4090,42 @@ func (ec *executionContext) _Review(ctx context.Context, sel ast.SelectionSet, o
 			out.Values[i] = ec._Review_id(ctx, field, obj)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "star":
 
 			out.Values[i] = ec._Review_star(ctx, field, obj)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "text":
 
 			out.Values[i] = ec._Review_text(ctx, field, obj)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
+		case "book":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Review_book(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

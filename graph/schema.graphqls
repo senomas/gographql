@@ -26,6 +26,7 @@ type Review {
   id: Int!
   star: Int!
   text: String!
+  book: Book!
 }
 
 type Book {
@@ -43,7 +44,7 @@ input AuthorFilter {
 input BookFilter {
   id: Int
   title: FilterText
-  authorName: FilterText
+  author_name: FilterText
   star: FilterIntRange
 }
 
@@ -68,11 +69,11 @@ input NewBook {
 input UpdateBook {
   id: Int!
   title: String
-  authorName: String
+  author_name: String
 }
 
 input NewReview {
-  bookId: Int!
+  book_id: Int!
   star: Int!
   text: String!
 }

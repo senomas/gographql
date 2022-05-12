@@ -60,3 +60,7 @@ models:
         resolver: true
       reviews:
         resolver: true
+  Review:
+    fields:
+      book:
+        resolver: true

@@ -153,7 +153,7 @@ func TestTodo(t *testing.T) {
 		}, &resp)
 	})
 
-	t.Run("find books filter by title and authorName", func(t *testing.T) {
+	t.Run("find books filter by title and author_name", func(t *testing.T) {
 		if mock != nil {
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" WHERE books.title LIKE $1 AND author_id = (SELECT id FROM "authors" WHERE name = $2) LIMIT 10`)).WithArgs("%Harry Potter%", "J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(1, "Harry Potter and the Sorcerer's Stone", 1).AddRow(2, "Harry Potter and the Chamber of Secrets", 1))
 			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "J.K. Rowling").AddRow(2, "Lord Voldermort"))
@@ -174,7 +174,7 @@ func TestTodo(t *testing.T) {
 						op: LIKE
 						value: "%Harry Potter%"
 					}
-					authorName: {
+					author_name: {
 						op: EQ
 						value: "J.K. Rowling"
 					}
@@ -435,6 +435,67 @@ func TestTodo(t *testing.T) {
 		wg.Wait()
 	})
 
+	t.Run("create review", func(t *testing.T) {
+		if mock != nil {
+			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE id = $1 LIMIT 1`)).WithArgs(3).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(3, "Harry Potter and the Book of Evil", 2))
+			mock.ExpectBegin()
+			mock.ExpectQuery(QuoteMeta(`INSERT INTO "reviews" ("book_id","star","text") VALUES ($1,$2,$3) RETURNING "id"`)).WithArgs(3, 5, "Tom Riddle").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(5))
+			mock.ExpectCommit()
+			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id FROM "books" WHERE id IN ($1)`)).WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(3, "Harry Potter and the Book of Evil", 2))
+			mock.ExpectQuery(QuoteMeta(`SELECT "id","name" FROM "authors" WHERE id IN ($1)`)).WithArgs(2).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(2, "Lord Voldermort"))
+		}
+		defer func() {
+			if mock != nil {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
+		}()
+
+		type CreateReview struct {
+			ID   int
+			Star int
+			Text string
+			Book model.Book
+		}
+		type respType struct {
+			CreateReview CreateReview
+		}
+		var resp respType
+		c.MustPost(`mutation {
+			createReview(input: {
+				book_id: 3
+				star: 5
+				text: "Tom Riddle"
+			}) {
+				id
+				star
+				text
+				book {
+					id
+					title
+					author {
+						id
+						name
+					}
+				}
+			}
+		}`, &resp, addContext(graph.NewDataSource(db)))
+		JsonMatch(t, &respType{
+			CreateReview: CreateReview{
+				ID:   5,
+				Star: 5,
+				Text: "Tom Riddle",
+				Book: model.Book{
+					ID:    3,
+					Title: "Harry Potter and the Book of Evil",
+					Author: &model.Author{
+						ID:   2,
+						Name: "Lord Voldermort",
+					},
+				},
+			},
+		}, &resp)
+	})
+
 	t.Run("create book", func(t *testing.T) {
 		if mock != nil {
 			mock.ExpectQuery(QuoteMeta(`SELECT "id" FROM "authors" WHERE name = $1 LIMIT 1`)).WithArgs("J.K. Rowling").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
@@ -549,7 +610,7 @@ func TestTodo(t *testing.T) {
 			updateBook(input: {
 				id: 4
 				title: "Harry Potter and the Evil Book"
-				authorName: "Lord Voldermort"
+				author_name: "Lord Voldermort"
 			}) {
 				id
 				title

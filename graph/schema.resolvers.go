@@ -46,6 +46,10 @@ func (r *queryResolver) Books(ctx context.Context, offset *int, limit *int, filt
 	return ctx.Value(Context_DataSource).(*DataSource).Books(ctx, offset, limit, filter)
 }
 
+func (r *reviewResolver) Book(ctx context.Context, obj *model.Review) (*model.Book, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).ReviewBook(ctx, obj)
+}
+
 // Book returns generated.BookResolver implementation.
 func (r *Resolver) Book() generated.BookResolver { return &bookResolver{r} }
 
@@ -55,6 +59,10 @@ func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResol
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
+// Review returns generated.ReviewResolver implementation.
+func (r *Resolver) Review() generated.ReviewResolver { return &reviewResolver{r} }
+
 type bookResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+type reviewResolver struct{ *Resolver }

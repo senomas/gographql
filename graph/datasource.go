@@ -150,12 +150,20 @@ func (ds *DataSource) DeleteBook(ctx context.Context, id int) (*model.Book, erro
 }
 
 func (ds *DataSource) CreateReview(ctx context.Context, input model.NewReview) (*model.Review, error) {
+	var book model.Book
+	result := ds.DB.Where("id = ?", input.BookID).Limit(1).Find(&book)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return nil, fmt.Errorf("book with id '%v' not exist", input.BookID)
+	}
 	review := &model.Review{
 		BookID: input.BookID,
 		Star:   input.Star,
 		Text:   input.Text,
 	}
-	result := ds.DB.Create(review)
+	result = ds.DB.Create(review)
 	if result.Error != nil {
 		return review, result.Error
 	} else if result.RowsAffected == 1 {
@@ -365,6 +373,57 @@ func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, offset *
 	data, err := ds.BatchLoader.Load(ctx, key)()
 	if data != nil {
 		return data.([]*model.Review), err
+	}
+	return nil, err
+}
+
+func (ds *DataSource) ReviewBook(ctx context.Context, obj *model.Review) (*model.Book, error) {
+	var fields []string
+	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
+		if f.Name == "author" {
+			fields = append(fields, "books.author_id")
+		} else if f.Name == "reviews" {
+			// no field
+		} else {
+			fields = append(fields, "books."+f.Name)
+		}
+	}
+	var books []*model.Book
+	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
+		return db.Select(fields).Where("id IN ?", param).Find(&books)
+	}, func(tx *gorm.DB) *string {
+		g := tx.Statement.SQL.String()
+		return &g
+	}, []interface{}{obj.BookID}, obj, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
+		ids := make([]int, len(keys))
+		for i, k := range keys {
+			ids[i] = k.Param.(*model.Review).BookID
+		}
+		result := keys[0].Query(ds.DB, ids)
+		if result.Error != nil {
+			return &dataloader.Result{
+				Error: result.Error,
+			}
+		}
+		return &dataloader.Result{
+			Data: books,
+		}
+	}, func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
+		if groupResults.Error != nil {
+			return groupResults
+		}
+		review := key.Param.(*model.Review)
+		books := groupResults.Data.([]*model.Book)
+		for _, b := range books {
+			if b.ID == review.BookID {
+				return &dataloader.Result{Data: b}
+			}
+		}
+		return &dataloader.Result{}
+	})
+	data, err := ds.BatchLoader.Load(ctx, key)()
+	if data != nil {
+		return data.(*model.Book), err
 	}
 	return nil, err
 }

@@ -61,6 +61,7 @@ type Review struct {
 	BookID int    `json:"-"`
 	Star   int    `json:"star"`
 	Text   string `json:"text"`
+	Book   *Book  `json:"book"`
 }
 
 type ReviewFilter struct {
