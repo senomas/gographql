@@ -48,6 +48,26 @@ func NewDataSource(db *gorm.DB) *DataSource {
 	return &d
 }
 
+func getFields(set ast.SelectionSet, path int, fn func(fields []string, path int, name string) (int, []string), fields []string) []string {
+	for _, s := range set {
+		switch v := s.(type) {
+		case *ast.Field:
+			npath, nfields := fn(fields, path, v.Name)
+			if nfields != nil {
+				fields = nfields
+				if v.SelectionSet != nil {
+					fields = getFields(v.SelectionSet, npath, fn, fields)
+				}
+			}
+		}
+	}
+	return fields
+}
+
+func GetFields(ctx context.Context, fn func(fields []string, path int, name string) (int, []string)) []string {
+	return getFields(graphql.GetFieldContext(ctx).Field.SelectionSet, 0, fn, []string{})
+}
+
 func (ds *DataSource) CreateAuthor(ctx context.Context, input model.NewAuthor) (*model.Author, error) {
 	author := &model.Author{
 		Name: input.Name,
@@ -188,70 +208,34 @@ func (ds *DataSource) Authors(ctx context.Context, offset *int, limit *int, filt
 	return &model.AuthorList{List: authors, Count: int(count)}, nil
 }
 
-type Field struct {
-	Name  string
-	Path  string
-	Field *ast.Field
-}
-
-func getFields(set ast.SelectionSet, path string, fields []*Field) []*Field {
-	for _, s := range set {
-		switch v := s.(type) {
-		case *ast.Field:
-			npath := path + v.Name
-			fields = append(fields, &Field{
-				Name:  v.Name,
-				Path:  npath,
-				Field: v,
-			})
-		}
-	}
-	return fields
-}
-
-func getRootField(set ast.SelectionSet, root string, path string, fields []*Field) []*Field {
-	for _, s := range set {
-		switch v := s.(type) {
-		case *ast.Field:
-			npath := path + v.Name
-			if npath == root {
-				return getFields(v.SelectionSet, "", fields)
-			}
-			if v.SelectionSet != nil {
-				fields = getRootField(v.SelectionSet, root, npath+".", fields)
-			}
-		}
-	}
-	return fields
-}
-
-func GetFields(ctx context.Context, root string) []*Field {
-	if root == "" {
-		return getFields(graphql.GetFieldContext(ctx).Field.SelectionSet, "", []*Field{})
-	} else {
-		return getRootField(graphql.GetFieldContext(ctx).Field.SelectionSet, root, "", []*Field{})
-	}
-}
-
 func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) (*model.BookList, error) {
-	var fields []string
 	needCount := false
 	needAuthor := false
-	for _, f := range GetFields(ctx, "") {
-		if f.Name == "count" {
-			needCount = true
+	fields := GetFields(ctx, func(fields []string, path int, name string) (int, []string) {
+		switch path {
+		case 0:
+			switch name {
+			case "count":
+				needCount = true
+				return path, fields
+			case "list":
+				return 1, fields
+			}
+		case 1: // path: list
+			switch name {
+			case "author":
+				needAuthor = true
+				return 2, fields
+			case "reviews":
+				return path, nil
+			default:
+				fields = append(fields, fmt.Sprintf(`"books"."%s"`, name))
+			}
+		case 2: // path: list.author
+			fields = append(fields, fmt.Sprintf(`"authors"."%s" AS "Author__%s"`, name, name))
 		}
-	}
-	for _, f := range GetFields(ctx, "list") {
-		if f.Name == "author" {
-			needAuthor = true
-			fields = append(fields, "books.author_id")
-		} else if f.Name == "reviews" {
-			// no field
-		} else {
-			fields = append(fields, "books."+f.Name)
-		}
-	}
+		return path, fields
+	})
 	var books []*model.Book
 	var count int64
 	var queryScope = func(param interface{}, needAuthor bool) func(db *gorm.DB) *gorm.DB {
@@ -266,7 +250,7 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 				}
 				if filter.AuthorName != nil {
 					needAuthor = true
-					FilterText(filter.AuthorName, tx, `"Author".name`)
+					FilterText(filter.AuthorName, tx, `"authors".name`)
 				}
 				if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
 					tx.Distinct()
@@ -280,7 +264,7 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 				}
 			}
 			if needAuthor {
-				tx.Joins("Author")
+				tx.Joins(`LEFT JOIN "authors" ON "books"."author_id" = "authors"."id"`)
 			}
 			return tx
 		}
@@ -289,14 +273,17 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 		if needCount {
 			db.Scopes(queryScope(param, false)).Model(&model.Book{}).Count(&count)
 		}
-		tx := db.Select(fields).Scopes(queryScope(param, needAuthor))
-		if offset != nil {
-			tx = tx.Offset(*offset)
+		if !needCount || count > 0 {
+			tx := db.Select(fields).Scopes(queryScope(param, needAuthor))
+			if offset != nil {
+				tx = tx.Offset(*offset)
+			}
+			if limit != nil {
+				tx = tx.Limit(*limit)
+			}
+			return tx.Find(&books)
 		}
-		if limit != nil {
-			tx = tx.Limit(*limit)
-		}
-		return tx.Find(&books)
+		return db
 	}, nil, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
 		result := keys[0].Query(ds.DB, nil)
 		if result.Error != nil {
