@@ -27,12 +27,10 @@ type BatchLoaderKey struct {
 	idx       int
 	key       string
 	group     *string
-	Param     interface{}
 	processed bool
+	Param     interface{}
 	Query     func(db *gorm.DB, params interface{}) *gorm.DB
 	Find      func(keys []*BatchLoaderKey) *dataloader.Result
-	Offset    *int
-	Limit     *int
 	Filter    func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result
 }
 
@@ -65,7 +63,7 @@ func (ds *DataSource) CreateAuthor(ctx context.Context, input model.NewAuthor) (
 
 func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*model.Book, error) {
 	var author model.Author
-	result := ds.DB.Select([]string{"id"}).Where("name = ?", input.AuthorName).Limit(1).Find(&author)
+	result := ds.DB.Where("name = ?", input.AuthorName).Limit(1).Find(&author)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -77,6 +75,7 @@ func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*mod
 		AuthorID: author.ID,
 	}
 	result = ds.DB.Create(book)
+	book.Author = &author
 	if result.Error != nil {
 		emsg := result.Error.Error()
 		if strings.Contains(emsg, "duplicate key value violates unique constraint") {
@@ -93,7 +92,7 @@ func (ds *DataSource) CreateBook(ctx context.Context, input model.NewBook) (*mod
 
 func (ds *DataSource) UpdateBook(ctx context.Context, input model.UpdateBook) (*model.Book, error) {
 	var book model.Book
-	result := ds.DB.Where("id = ?", input.ID).Limit(1).Find(&book)
+	result := ds.DB.Where("books.id = ?", input.ID).Limit(1).Joins("Author").Find(&book)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -107,7 +106,7 @@ func (ds *DataSource) UpdateBook(ctx context.Context, input model.UpdateBook) (*
 	}
 	if input.AuthorName != nil {
 		var author model.Author
-		result := ds.DB.Select([]string{"id"}).Where("name = ?", input.AuthorName).Limit(1).Find(&author)
+		result := ds.DB.Where("name = ?", input.AuthorName).Limit(1).Find(&author)
 		if result.Error != nil {
 			return nil, result.Error
 		}
@@ -115,6 +114,7 @@ func (ds *DataSource) UpdateBook(ctx context.Context, input model.UpdateBook) (*
 			return nil, fmt.Errorf("author with name '%v' not exist", input.AuthorName)
 		}
 		book.AuthorID = author.ID
+		book.Author = &author
 		fields = append(fields, "author_id")
 	}
 	result = ds.DB.Select(fields).Updates(&book)
@@ -134,7 +134,7 @@ func (ds *DataSource) UpdateBook(ctx context.Context, input model.UpdateBook) (*
 
 func (ds *DataSource) DeleteBook(ctx context.Context, id int) (*model.Book, error) {
 	var book model.Book
-	result := ds.DB.Where("id = ?", id).Limit(1).Find(&book)
+	result := ds.DB.Where("books.id = ?", id).Limit(1).Joins("Author").Find(&book)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -236,6 +236,7 @@ func GetFields(ctx context.Context, root string) []*Field {
 func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) (*model.BookList, error) {
 	var fields []string
 	needCount := false
+	needAuthor := false
 	for _, f := range GetFields(ctx, "") {
 		if f.Name == "count" {
 			needCount = true
@@ -243,6 +244,7 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 	}
 	for _, f := range GetFields(ctx, "list") {
 		if f.Name == "author" {
+			needAuthor = true
 			fields = append(fields, "books.author_id")
 		} else if f.Name == "reviews" {
 			// no field
@@ -252,34 +254,42 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 	}
 	var books []*model.Book
 	var count int64
+	var queryScope = func(param interface{}, needAuthor bool) func(db *gorm.DB) *gorm.DB {
+		return func(db *gorm.DB) *gorm.DB {
+			tx := db
+			if filter != nil {
+				if filter.ID != nil {
+					tx.Where("books.id = ?", filter.ID)
+				}
+				if filter.Title != nil {
+					FilterText(filter.Title, tx, "books.title")
+				}
+				if filter.AuthorName != nil {
+					needAuthor = true
+					FilterText(filter.AuthorName, tx, `"Author".name`)
+				}
+				if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
+					tx.Distinct()
+					tx.Joins("JOIN reviews ON books.id = reviews.book_id")
+					if filter.Star.Min != nil {
+						tx.Where("reviews.star >= ?", filter.Star.Min)
+					}
+					if filter.Star.Max != nil {
+						tx.Where("reviews.star <= ?", filter.Star.Max)
+					}
+				}
+			}
+			if needAuthor {
+				tx.Joins("Author")
+			}
+			return tx
+		}
+	}
 	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
-		tx := db.Select(fields)
-		if filter != nil {
-			if filter.ID != nil {
-				tx.Where("books.id = ?", filter.ID)
-			}
-			if filter.Title != nil {
-				FilterText(filter.Title, tx, "books.title")
-			}
-			if filter.AuthorName != nil {
-				atx := ds.DB.Select("id")
-				FilterText(filter.AuthorName, atx, "name")
-				tx.Where("author_id = (?)", atx.Table("authors"))
-			}
-			if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
-				tx.Distinct()
-				tx.Joins("JOIN reviews ON books.id = reviews.book_id")
-				if filter.Star.Min != nil {
-					tx.Where("reviews.star >= ?", filter.Star.Min)
-				}
-				if filter.Star.Max != nil {
-					tx.Where("reviews.star <= ?", filter.Star.Max)
-				}
-			}
-		}
 		if needCount {
-			tx.Table("books").Count(&count)
+			db.Scopes(queryScope(param, false)).Model(&model.Book{}).Count(&count)
 		}
+		tx := db.Select(fields).Scopes(queryScope(param, needAuthor))
 		if offset != nil {
 			tx = tx.Offset(*offset)
 		}
@@ -287,7 +297,7 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 			tx = tx.Limit(*limit)
 		}
 		return tx.Find(&books)
-	}, nil, nil, nil, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
+	}, nil, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
 		result := keys[0].Query(ds.DB, nil)
 		if result.Error != nil {
 			return &dataloader.Result{
@@ -303,51 +313,6 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 	data, err := ds.BatchLoader.Load(ctx, key)()
 	if data != nil {
 		return data.(*model.BookList), err
-	}
-	return nil, err
-}
-
-func (ds *DataSource) BookAuthor(ctx context.Context, obj *model.Book) (*model.Author, error) {
-	var fields []string
-	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
-		fields = append(fields, f.Name)
-	}
-	var authors []*model.Author
-	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
-		return db.Select(fields).Where("id IN ?", param).Find(&authors)
-	}, func(tx *gorm.DB) *string {
-		g := tx.Statement.SQL.String()
-		return &g
-	}, []interface{}{obj.AuthorID}, obj, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
-		ids := make([]int, len(keys))
-		for i, k := range keys {
-			ids[i] = k.Param.(*model.Book).AuthorID
-		}
-		result := keys[0].Query(ds.DB, ids)
-		if result.Error != nil {
-			return &dataloader.Result{
-				Error: result.Error,
-			}
-		}
-		return &dataloader.Result{
-			Data: authors,
-		}
-	}, func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result {
-		if groupResults.Error != nil {
-			return groupResults
-		}
-		book := key.Param.(*model.Book)
-		authors := groupResults.Data.([]*model.Author)
-		for _, a := range authors {
-			if a.ID == book.AuthorID {
-				return &dataloader.Result{Data: a}
-			}
-		}
-		return &dataloader.Result{}
-	})
-	data, err := ds.BatchLoader.Load(ctx, key)()
-	if data != nil {
-		return data.(*model.Author), err
 	}
 	return nil, err
 }
@@ -394,7 +359,7 @@ func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, offset *
 		offset: offset,
 		limit:  limit,
 		filter: filter,
-	}, obj, offset, limit, func(keys []*BatchLoaderKey) *dataloader.Result {
+	}, obj, func(keys []*BatchLoaderKey) *dataloader.Result {
 		ids := make([]int, len(keys))
 		for i, k := range keys {
 			ids[i] = k.Param.(*model.Book).ID
@@ -436,9 +401,11 @@ func (ds *DataSource) BookReviews(ctx context.Context, obj *model.Book, offset *
 
 func (ds *DataSource) ReviewBook(ctx context.Context, obj *model.Review) (*model.Book, error) {
 	var fields []string
+	needAuthor := false
 	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
 		if f.Name == "author" {
 			fields = append(fields, "books.author_id")
+			needAuthor = true
 		} else if f.Name == "reviews" {
 			// no field
 		} else {
@@ -447,11 +414,15 @@ func (ds *DataSource) ReviewBook(ctx context.Context, obj *model.Review) (*model
 	}
 	var books []*model.Book
 	key := ds.NewBatchLoaderKey(func(db *gorm.DB, param interface{}) *gorm.DB {
-		return db.Select(fields).Where("id IN ?", param).Find(&books)
+		tx := db.Select(fields).Where("books.id IN ?", param)
+		if needAuthor {
+			tx.Joins("Author")
+		}
+		return tx.Find(&books)
 	}, func(tx *gorm.DB) *string {
 		g := tx.Statement.SQL.String()
 		return &g
-	}, []interface{}{obj.BookID}, obj, nil, nil, func(keys []*BatchLoaderKey) *dataloader.Result {
+	}, []interface{}{obj.BookID}, obj, func(keys []*BatchLoaderKey) *dataloader.Result {
 		ids := make([]int, len(keys))
 		for i, k := range keys {
 			ids[i] = k.Param.(*model.Review).BookID
@@ -485,7 +456,7 @@ func (ds *DataSource) ReviewBook(ctx context.Context, obj *model.Review) (*model
 	return nil, err
 }
 
-func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{}) *gorm.DB, groupFn func(tx *gorm.DB) *string, params interface{}, obj interface{}, offset *int, limit *int, find func(keys []*BatchLoaderKey) *dataloader.Result, filter func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result) *BatchLoaderKey {
+func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{}) *gorm.DB, groupFn func(tx *gorm.DB) *string, params interface{}, obj interface{}, find func(keys []*BatchLoaderKey) *dataloader.Result, filter func(key *BatchLoaderKey, groupResults *dataloader.Result) *dataloader.Result) *BatchLoaderKey {
 	tx := query(ds.DB.Session(&gorm.Session{DryRun: true}), params)
 	key := ds.DB.Dialector.Explain(tx.Statement.SQL.String(), tx.Statement.Vars...)
 	var group *string
@@ -498,8 +469,6 @@ func (ds *DataSource) NewBatchLoaderKey(query func(tx *gorm.DB, param interface{
 		Query:  query,
 		Param:  obj,
 		Find:   find,
-		Offset: offset,
-		Limit:  limit,
 		Filter: filter,
 	}
 }
@@ -512,11 +481,11 @@ func (ds *DataSource) batchLoader(ctx context.Context, keys dataloader.Keys) []*
 		if !key.processed {
 			key.idx = i
 			gkeys := []*BatchLoaderKey{key}
-			if key.group != nil && key.Limit == nil && key.Offset == nil {
+			if key.group != nil {
 				for j := i + 1; j < keysLen; j++ {
 					jkey := keys[j].(*BatchLoaderKey)
 					if !jkey.processed {
-						if *key.group == *jkey.group && jkey.Limit == nil && jkey.Offset == nil {
+						if *key.group == *jkey.group {
 							jkey.idx = j
 							jkey.processed = true
 							gkeys = append(gkeys, jkey)

@@ -56,8 +56,6 @@ models:
       - github.com/99designs/gqlgen/graphql.Int32
   Book:
     fields:
-      author:
-        resolver: true
       reviews:
         resolver: true
   Review:
