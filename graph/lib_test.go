@@ -197,7 +197,7 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 				[]string{"count"}).
 				AddRow(0))
 
-			mock.ExpectExec(QuoteMeta(`CREATE TABLE "reviews" ("id" bigserial,"book_id" bigint,"star" bigint,"text" text,PRIMARY KEY ("id"),CONSTRAINT "fk_books_reviews" FOREIGN KEY ("book_id") REFERENCES "books"("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
+			mock.ExpectExec(QuoteMeta(`CREATE TABLE "reviews" ("id" bigserial,"star" bigint,"text" text,"book_id" bigint,PRIMARY KEY ("id"),CONSTRAINT "fk_books_reviews" FOREIGN KEY ("book_id") REFERENCES "books"("id"))`)).WithArgs(NoArgs...).WillReturnResult(driver.RowsAffected(1))
 
 			db.AutoMigrate(&model.Author{}, &model.Book{}, &model.Review{})
 

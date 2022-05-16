@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/99designs/gqlgen/client"
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/senomas/gographql/graph"
@@ -26,9 +27,12 @@ func addContext(ds *graph.DataSource) client.Option {
 
 func TestTodo(t *testing.T) {
 
-	h := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}}))
+	cfg := generated.Config{Resolvers: &graph.Resolver{}}
+	cfg.Directives.Gorm = func(ctx context.Context, obj interface{}, next graphql.Resolver, tag *string, ref *string) (interface{}, error) {
+		return next(ctx)
+	}
+	h := handler.NewDefaultServer(generated.NewExecutableSchema(cfg))
 	c := client.New(h)
-
 	var db *gorm.DB
 	var mock sqlmock.Sqlmock
 
@@ -573,7 +577,7 @@ func TestTodo(t *testing.T) {
 		if mock != nil {
 			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE id = $1 LIMIT 1`)).WithArgs(3).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id"}).AddRow(3, "Harry Potter and the Book of Evil", 2))
 			mock.ExpectBegin()
-			mock.ExpectQuery(QuoteMeta(`INSERT INTO "reviews" ("book_id","star","text") VALUES ($1,$2,$3) RETURNING "id"`)).WithArgs(3, 5, "Tom Riddle").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(5))
+			mock.ExpectQuery(QuoteMeta(`INSERT INTO "reviews" ("star","text","book_id") VALUES ($1,$2,$3) RETURNING "id"`)).WithArgs(5, "Tom Riddle", 3).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(5))
 			mock.ExpectCommit()
 			mock.ExpectQuery(QuoteMeta(`SELECT books.id,books.title,books.author_id,"Author"."id" AS "Author__id","Author"."name" AS "Author__name" FROM "books" LEFT JOIN "authors" "Author" ON "books"."author_id" = "Author"."id" WHERE books.id IN ($1)`)).WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id", "Author__id", "Author__name"}).AddRow(3, "Harry Potter and the Book of Evil", 2, 2, "Lord Voldermort"))
 		}

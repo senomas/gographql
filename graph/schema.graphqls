@@ -18,8 +18,8 @@ input FilterIntRange {
 }
 
 type Author {
-  id: Int!
-  name: String!
+  id: Int! @gorm(tag: "primaryKey")
+  name: String! @gorm(tag: "unique")
 }
 
 type AuthorList {
@@ -28,16 +28,16 @@ type AuthorList {
 }
 
 type Review {
-  id: Int!
+  id: Int! @gorm(tag: "primaryKey")
   star: Int!
   text: String!
-  book: Book!
+  book: Book! @gorm(ref: "BookID int")
 }
 
 type Book {
-  id: Int!
-  title: String!
-  author: Author!
+  id: Int! @gorm(tag: "primaryKey")
+  title: String! @gorm(tag: "unique")
+  author: Author! @gorm(ref: "AuthorID int")
   reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
 }
 
