@@ -9,7 +9,8 @@ build:
   GOARCH=amd64 GOOS=window go build -o ${BINARY_NAME}-windows main.go
 
 run:
-	GIN_MODE=release go run main.go
+	docker-compose up -d postgres
+	GIN_MODE=release go run .
 
 clean:
 	go clean

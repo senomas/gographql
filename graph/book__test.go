@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/99designs/gqlgen/client"
-	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/senomas/gographql/graph"
@@ -28,9 +27,7 @@ func addContext(ds *graph.DataSource) client.Option {
 func TestTodo(t *testing.T) {
 
 	cfg := generated.Config{Resolvers: &graph.Resolver{}}
-	cfg.Directives.Gorm = func(ctx context.Context, obj interface{}, next graphql.Resolver, tag *string, ref *string) (interface{}, error) {
-		return next(ctx)
-	}
+	cfg.Directives.Gorm = graph.Directive_Gorm
 	h := handler.NewDefaultServer(generated.NewExecutableSchema(cfg))
 	c := client.New(h)
 	var db *gorm.DB
