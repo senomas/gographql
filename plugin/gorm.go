@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/types"
 	"sort"
+	"strings"
 
 	"github.com/99designs/gqlgen/codegen/config"
 	"github.com/99designs/gqlgen/codegen/templates"
@@ -12,6 +13,13 @@ import (
 )
 
 type BuildMutateHook = func(b *ModelBuild) *ModelBuild
+
+type FieldMutateHook = func(td *ast.Definition, fd *ast.FieldDefinition, f *Field) (*Field, error)
+
+// defaultFieldMutateHook is the default hook for the Plugin which applies the GoTagFieldHook.
+func defaultFieldMutateHook(td *ast.Definition, fd *ast.FieldDefinition, f *Field) (*Field, error) {
+	return GoTagFieldHook(td, fd, f)
+}
 
 func defaultBuildMutateHook(b *ModelBuild) *ModelBuild {
 	return b
@@ -28,6 +36,7 @@ type ModelBuild struct {
 type Interface struct {
 	Description string
 	Name        string
+	Implements  []string
 }
 
 type Object struct {
@@ -56,14 +65,16 @@ type EnumValue struct {
 	Name        string
 }
 
-type Plugin struct {
-	MutateHook BuildMutateHook
-}
-
 func New() plugin.Plugin {
 	return &Plugin{
 		MutateHook: defaultBuildMutateHook,
+		FieldHook:  defaultFieldMutateHook,
 	}
+}
+
+type Plugin struct {
+	MutateHook BuildMutateHook
+	FieldHook  FieldMutateHook
 }
 
 var _ plugin.ConfigMutator = &Plugin{}
@@ -80,16 +91,15 @@ func (m *Plugin) MutateConfig(cfg *config.Config) error {
 	}
 
 	for _, schemaType := range cfg.Schema.Types {
-
-		if schemaType.BuiltIn {
+		if cfg.Models.UserDefined(schemaType.Name) {
 			continue
 		}
-
 		switch schemaType.Kind {
 		case ast.Interface, ast.Union:
 			it := &Interface{
 				Description: schemaType.Description,
 				Name:        schemaType.Name,
+				Implements:  schemaType.Interfaces,
 			}
 
 			b.Interfaces = append(b.Interfaces, it)
@@ -101,8 +111,23 @@ func (m *Plugin) MutateConfig(cfg *config.Config) error {
 				Description: schemaType.Description,
 				Name:        schemaType.Name,
 			}
+
+			// If Interface A implements interface B, and Interface C also implements interface B
+			// then both A and C have methods of B.
+			// The reason for checking unique is to prevent the same method B from being generated twice.
+			uniqueMap := map[string]bool{}
 			for _, implementor := range cfg.Schema.GetImplements(schemaType) {
-				it.Implements = append(it.Implements, implementor.Name)
+				if !uniqueMap[implementor.Name] {
+					it.Implements = append(it.Implements, implementor.Name)
+					uniqueMap[implementor.Name] = true
+				}
+				// for interface implements
+				for _, iface := range implementor.Interfaces {
+					if !uniqueMap[iface] {
+						it.Implements = append(it.Implements, iface)
+						uniqueMap[iface] = true
+					}
+				}
 			}
 
 			for _, field := range schemaType.Fields {
@@ -178,13 +203,23 @@ func (m *Plugin) MutateConfig(cfg *config.Config) error {
 					}
 				}
 
-				it.Fields = append(it.Fields, &Field{
+				f := &Field{
 					Name:        name,
 					Type:        typ,
 					Description: field.Description,
 					Tag:         tag,
 					Ref:         ref,
-				})
+				}
+
+				if m.FieldHook != nil {
+					mf, err := m.FieldHook(schemaType, field, f)
+					if err != nil {
+						return fmt.Errorf("generror: field %v.%v: %w", it.Name, field.Name, err)
+					}
+					f = mf
+				}
+
+				it.Fields = append(it.Fields, f)
 			}
 
 			b.Models = append(b.Models, it)
@@ -227,103 +262,56 @@ func (m *Plugin) MutateConfig(cfg *config.Config) error {
 		return nil
 	}
 
-	return templates.Render(templates.Options{
+	if m.MutateHook != nil {
+		b = m.MutateHook(b)
+	}
+
+	err := templates.Render(templates.Options{
 		PackageName:     cfg.Model.Package,
 		Filename:        cfg.Model.Filename,
 		Data:            b,
 		GeneratedHeader: true,
 		Packages:        cfg.Packages,
-		Template: `
-			{{ reserveImport "context"  }}
-			{{ reserveImport "fmt"  }}
-			{{ reserveImport "io"  }}
-			{{ reserveImport "strconv"  }}
-			{{ reserveImport "time"  }}
-			{{ reserveImport "sync"  }}
-			{{ reserveImport "errors"  }}
-			{{ reserveImport "bytes"  }}
-			
-			{{ reserveImport "github.com/vektah/gqlparser/v2" }}
-			{{ reserveImport "github.com/vektah/gqlparser/v2/ast" }}
-			{{ reserveImport "github.com/99designs/gqlgen/graphql" }}
-			{{ reserveImport "github.com/99designs/gqlgen/graphql/introspection" }}
-			
-			{{- range $model := .Interfaces }}
-				{{ with .Description }} {{.|prefixLines "// "}} {{ end }}
-				type {{.Name|go }} interface {
-					Is{{.Name|go }}()
-				}
-			{{- end }}
-			
-			{{ range $model := .Models }}
-				{{with .Description }} {{.|prefixLines "// "}} {{end}}
-				type {{ .Name|go }} struct {
-					{{- range $field := .Fields }}
-						{{- with .Description }}
-							{{.|prefixLines "// "}}
-						{{- end}}
-						{{ $field.Name|go }} {{$field.Type | ref}}` + "`{{$field.Tag}}`" + `
-						{{- if $field.Ref}}
-						{{ $field.Ref }}
-						{{- end}}
-					{{- end }}
-				}
-			
-				{{- range $iface := .Implements }}
-					func ({{ $model.Name|go }}) Is{{ $iface|go }}() {}
-				{{- end }}
-			{{- end}}
-			
-			{{ range $enum := .Enums }}
-				{{ with .Description }} {{.|prefixLines "// "}} {{end}}
-				type {{.Name|go }} string
-				const (
-				{{- range $value := .Values}}
-					{{- with .Description}}
-						{{.|prefixLines "// "}}
-					{{- end}}
-					{{ $enum.Name|go }}{{ .Name|go }} {{$enum.Name|go }} = {{.Name|quote}}
-				{{- end }}
-				)
-			
-				var All{{.Name|go }} = []{{ .Name|go }}{
-				{{- range $value := .Values}}
-					{{$enum.Name|go }}{{ .Name|go }},
-				{{- end }}
-				}
-			
-				func (e {{.Name|go }}) IsValid() bool {
-					switch e {
-					case {{ range $index, $element := .Values}}{{if $index}},{{end}}{{ $enum.Name|go }}{{ $element.Name|go }}{{end}}:
-						return true
-					}
-					return false
-				}
-			
-				func (e {{.Name|go }}) String() string {
-					return string(e)
-				}
-			
-				func (e *{{.Name|go }}) UnmarshalGQL(v interface{}) error {
-					str, ok := v.(string)
-					if !ok {
-						return fmt.Errorf("enums must be strings")
-					}
-			
-					*e = {{ .Name|go }}(str)
-					if !e.IsValid() {
-						return fmt.Errorf("%s is not a valid {{ .Name }}", str)
-					}
-					return nil
-				}
-			
-				func (e {{.Name|go }}) MarshalGQL(w io.Writer) {
-					fmt.Fprint(w, strconv.Quote(e.String()))
-				}
-			
-			{{- end }}
-		`,
 	})
+	if err != nil {
+		return err
+	}
+
+	// We may have generated code in a package we already loaded, so we reload all packages
+	// to allow packages to be compared correctly
+	cfg.ReloadAllPackages()
+
+	return nil
+}
+
+// GoTagFieldHook applies the goTag directive to the generated Field f. When applying the Tag to the field, the field
+// name is used when no value argument is present.
+func GoTagFieldHook(td *ast.Definition, fd *ast.FieldDefinition, f *Field) (*Field, error) {
+	args := make([]string, 0)
+	for _, goTag := range fd.Directives.ForNames("goTag") {
+		key := ""
+		value := fd.Name
+
+		if arg := goTag.Arguments.ForName("key"); arg != nil {
+			if k, err := arg.Value.Value(nil); err == nil {
+				key = k.(string)
+			}
+		}
+
+		if arg := goTag.Arguments.ForName("value"); arg != nil {
+			if v, err := arg.Value.Value(nil); err == nil {
+				value = v.(string)
+			}
+		}
+
+		args = append(args, key+":\""+value+"\"")
+	}
+
+	if len(args) > 0 {
+		f.Tag = f.Tag + " " + strings.Join(args, " ")
+	}
+
+	return f, nil
 }
 
 func isStruct(t types.Type) bool {
