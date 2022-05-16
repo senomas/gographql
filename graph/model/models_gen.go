@@ -24,11 +24,10 @@ type AuthorList struct {
 }
 
 type Book struct {
-	ID       int       `json:"id" gorm:"primaryKey"`
-	Title    string    `json:"title" gorm:"unique"`
-	Author   *Author   `json:"author"`
-	AuthorID int       `json:"-"`
-	Reviews  []*Review `json:"reviews"`
+	ID      int       `json:"id" gorm:"primaryKey"`
+	Title   string    `json:"title" gorm:"unique"`
+	Authors []*Author `json:"authors" gorm:"many2many:book_authors;constraint:OnDelete:CASCADE"`
+	Reviews []*Review `json:"reviews" gorm:"constraint:OnDelete:CASCADE"`
 }
 
 type BookFilter struct {
@@ -58,8 +57,8 @@ type NewAuthor struct {
 }
 
 type NewBook struct {
-	Title      string `json:"title"`
-	AuthorName string `json:"authorName"`
+	Title       string   `json:"title"`
+	AuthorsName []string `json:"authors_name"`
 }
 
 type NewReview struct {
@@ -81,9 +80,9 @@ type ReviewFilter struct {
 }
 
 type UpdateBook struct {
-	ID         int     `json:"id"`
-	Title      *string `json:"title"`
-	AuthorName *string `json:"author_name"`
+	ID          int      `json:"id"`
+	Title       *string  `json:"title"`
+	AuthorsName []string `json:"authors_name"`
 }
 
 type FilterTextOp string

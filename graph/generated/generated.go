@@ -58,7 +58,7 @@ type ComplexityRoot struct {
 	}
 
 	Book struct {
-		Author  func(childComplexity int) int
+		Authors func(childComplexity int) int
 		ID      func(childComplexity int) int
 		Reviews func(childComplexity int, offset *int, limit *int, filter *model.ReviewFilter) int
 		Title   func(childComplexity int) int
@@ -91,6 +91,7 @@ type ComplexityRoot struct {
 }
 
 type BookResolver interface {
+	Authors(ctx context.Context, obj *model.Book) ([]*model.Author, error)
 	Reviews(ctx context.Context, obj *model.Book, offset *int, limit *int, filter *model.ReviewFilter) ([]*model.Review, error)
 }
 type MutationResolver interface {
@@ -151,12 +152,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AuthorList.List(childComplexity), true
 
-	case "Book.author":
-		if e.complexity.Book.Author == nil {
+	case "Book.authors":
+		if e.complexity.Book.Authors == nil {
 			break
 		}
 
-		return e.complexity.Book.Author(childComplexity), true
+		return e.complexity.Book.Authors(childComplexity), true
 
 	case "Book.id":
 		if e.complexity.Book.ID == nil {
@@ -426,8 +427,10 @@ type Review {
 type Book {
   id: Int! @gorm(tag: "primaryKey")
   title: String! @gorm(tag: "unique")
-  author: Author! @gorm(ref: "AuthorID int")
+  authors: [Author!]
+    @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE")
   reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
+    @gorm(tag: "constraint:OnDelete:CASCADE")
 }
 
 type BookList {
@@ -462,13 +465,13 @@ input NewAuthor {
 
 input NewBook {
   title: String!
-  authorName: String!
+  authors_name: [String!]!
 }
 
 input UpdateBook {
   id: Int!
   title: String
-  author_name: String
+  authors_name: [String!]
 }
 
 input NewReview {
@@ -493,7 +496,7 @@ type Mutation {
 				name: String
 			) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
 
-			directive @gorm(tag: String, ref: String) on OBJECT | FIELD_DEFINITION
+			directive @gorm(tag: String, ref: String) on FIELD_DEFINITION
 
 			scalar Time
 		`, BuiltIn: false},
@@ -1121,8 +1124,8 @@ func (ec *executionContext) fieldContext_Book_title(ctx context.Context, field g
 	return fc, nil
 }
 
-func (ec *executionContext) _Book_author(ctx context.Context, field graphql.CollectedField, obj *model.Book) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Book_author(ctx, field)
+func (ec *executionContext) _Book_authors(ctx context.Context, field graphql.CollectedField, obj *model.Book) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Book_authors(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1136,17 +1139,17 @@ func (ec *executionContext) _Book_author(ctx context.Context, field graphql.Coll
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return obj.Author, nil
+			return ec.resolvers.Book().Authors(rctx, obj)
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
-			ref, err := ec.unmarshalOString2ᚖstring(ctx, "AuthorID int")
+			tag, err := ec.unmarshalOString2ᚖstring(ctx, "many2many:book_authors;constraint:OnDelete:CASCADE")
 			if err != nil {
 				return nil, err
 			}
 			if ec.directives.Gorm == nil {
 				return nil, errors.New("directive gorm is not implemented")
 			}
-			return ec.directives.Gorm(ctx, obj, directive0, nil, ref)
+			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
 		}
 
 		tmp, err := directive1(rctx)
@@ -1156,32 +1159,29 @@ func (ec *executionContext) _Book_author(ctx context.Context, field graphql.Coll
 		if tmp == nil {
 			return nil, nil
 		}
-		if data, ok := tmp.(*model.Author); ok {
+		if data, ok := tmp.([]*model.Author); ok {
 			return data, nil
 		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/senomas/gographql/graph/model.Author`, tmp)
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/senomas/gographql/graph/model.Author`, tmp)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
 	}
 	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Author)
+	res := resTmp.([]*model.Author)
 	fc.Result = res
-	return ec.marshalNAuthor2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthor(ctx, field.Selections, res)
+	return ec.marshalOAuthor2ᚕᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthorᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Book_author(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Book_authors(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Book",
 		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -1208,8 +1208,32 @@ func (ec *executionContext) _Book_reviews(ctx context.Context, field graphql.Col
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.ReviewFilter))
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.ReviewFilter))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			tag, err := ec.unmarshalOString2ᚖstring(ctx, "constraint:OnDelete:CASCADE")
+			if err != nil {
+				return nil, err
+			}
+			if ec.directives.Gorm == nil {
+				return nil, errors.New("directive gorm is not implemented")
+			}
+			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.([]*model.Review); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/senomas/gographql/graph/model.Review`, tmp)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1303,8 +1327,8 @@ func (ec *executionContext) fieldContext_BookList_list(ctx context.Context, fiel
 				return ec.fieldContext_Book_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Book_title(ctx, field)
-			case "author":
-				return ec.fieldContext_Book_author(ctx, field)
+			case "authors":
+				return ec.fieldContext_Book_authors(ctx, field)
 			case "reviews":
 				return ec.fieldContext_Book_reviews(ctx, field)
 			}
@@ -1462,8 +1486,8 @@ func (ec *executionContext) fieldContext_Mutation_createBook(ctx context.Context
 				return ec.fieldContext_Book_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Book_title(ctx, field)
-			case "author":
-				return ec.fieldContext_Book_author(ctx, field)
+			case "authors":
+				return ec.fieldContext_Book_authors(ctx, field)
 			case "reviews":
 				return ec.fieldContext_Book_reviews(ctx, field)
 			}
@@ -1527,8 +1551,8 @@ func (ec *executionContext) fieldContext_Mutation_updateBook(ctx context.Context
 				return ec.fieldContext_Book_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Book_title(ctx, field)
-			case "author":
-				return ec.fieldContext_Book_author(ctx, field)
+			case "authors":
+				return ec.fieldContext_Book_authors(ctx, field)
 			case "reviews":
 				return ec.fieldContext_Book_reviews(ctx, field)
 			}
@@ -1592,8 +1616,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBook(ctx context.Context
 				return ec.fieldContext_Book_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Book_title(ctx, field)
-			case "author":
-				return ec.fieldContext_Book_author(ctx, field)
+			case "authors":
+				return ec.fieldContext_Book_authors(ctx, field)
 			case "reviews":
 				return ec.fieldContext_Book_reviews(ctx, field)
 			}
@@ -2153,8 +2177,8 @@ func (ec *executionContext) fieldContext_Review_book(ctx context.Context, field 
 				return ec.fieldContext_Book_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Book_title(ctx, field)
-			case "author":
-				return ec.fieldContext_Book_author(ctx, field)
+			case "authors":
+				return ec.fieldContext_Book_authors(ctx, field)
 			case "reviews":
 				return ec.fieldContext_Book_reviews(ctx, field)
 			}
@@ -4117,11 +4141,11 @@ func (ec *executionContext) unmarshalInputNewBook(ctx context.Context, obj inter
 			if err != nil {
 				return it, err
 			}
-		case "authorName":
+		case "authors_name":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authorName"))
-			it.AuthorName, err = ec.unmarshalNString2string(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authors_name"))
+			it.AuthorsName, err = ec.unmarshalNString2ᚕstringᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4218,11 +4242,11 @@ func (ec *executionContext) unmarshalInputUpdateBook(ctx context.Context, obj in
 			if err != nil {
 				return it, err
 			}
-		case "author_name":
+		case "authors_name":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("author_name"))
-			it.AuthorName, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("authors_name"))
+			it.AuthorsName, err = ec.unmarshalOString2ᚕstringᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4334,13 +4358,23 @@ func (ec *executionContext) _Book(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
-		case "author":
+		case "authors":
+			field := field
 
-			out.Values[i] = ec._Book_author(ctx, field, obj)
-
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&invalids, 1)
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Book_authors(ctx, field, obj)
+				return res
 			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		case "reviews":
 			field := field
 
@@ -5222,6 +5256,38 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
+func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalNUpdateBook2githubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐUpdateBook(ctx context.Context, v interface{}) (model.UpdateBook, error) {
 	res, err := ec.unmarshalInputUpdateBook(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5480,6 +5546,53 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
+func (ec *executionContext) marshalOAuthor2ᚕᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthorᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Author) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAuthor2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthor(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOAuthorFilter2ᚖgithubᚗcomᚋsenomasᚋgographqlᚋgraphᚋmodelᚐAuthorFilter(ctx context.Context, v interface{}) (*model.AuthorFilter, error) {
 	if v == nil {
 		return nil, nil
@@ -5560,6 +5673,44 @@ func (ec *executionContext) unmarshalOReviewFilter2ᚖgithubᚗcomᚋsenomasᚋg
 	}
 	res, err := ec.unmarshalInputReviewFilter(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {

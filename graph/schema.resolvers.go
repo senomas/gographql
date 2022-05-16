@@ -10,6 +10,10 @@ import (
 	"github.com/senomas/gographql/graph/model"
 )
 
+func (r *bookResolver) Authors(ctx context.Context, obj *model.Book) ([]*model.Author, error) {
+	return ctx.Value(Context_DataSource).(*DataSource).BookAuthors(ctx, obj)
+}
+
 func (r *bookResolver) Reviews(ctx context.Context, obj *model.Book, offset *int, limit *int, filter *model.ReviewFilter) ([]*model.Review, error) {
 	return ctx.Value(Context_DataSource).(*DataSource).BookReviews(ctx, obj, offset, limit, filter)
 }

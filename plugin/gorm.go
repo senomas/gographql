@@ -328,7 +328,7 @@ func (r *Plugin) InjectSourceEarly() *ast.Source {
 				name: String
 			) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
 
-			directive @gorm(tag: String, ref: String) on OBJECT | FIELD_DEFINITION
+			directive @gorm(tag: String, ref: String) on FIELD_DEFINITION
 
 			scalar Time
 		`,

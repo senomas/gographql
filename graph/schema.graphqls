@@ -37,8 +37,10 @@ type Review {
 type Book {
   id: Int! @gorm(tag: "primaryKey")
   title: String! @gorm(tag: "unique")
-  author: Author! @gorm(ref: "AuthorID int")
+  authors: [Author!]
+    @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE")
   reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
+    @gorm(tag: "constraint:OnDelete:CASCADE")
 }
 
 type BookList {
@@ -73,13 +75,13 @@ input NewAuthor {
 
 input NewBook {
   title: String!
-  authorName: String!
+  authors_name: [String!]!
 }
 
 input UpdateBook {
   id: Int!
   title: String
-  author_name: String
+  authors_name: [String!]
 }
 
 input NewReview {
