@@ -3,6 +3,9 @@ TEST_PACKAGE=./graph
 
 .PHONY: all test clean
 
+gen:
+	go generate ./...
+
 build:
 	# GOARCH=amd64 GOOS=darwin go build -o ${BINARY_NAME}-darwin main.go
   # GOARCH=amd64 GOOS=linux go build -o ${BINARY_NAME}-linux main.go
