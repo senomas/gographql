@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log"
 	"os"
 	"strings"
@@ -14,6 +15,11 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+func JsonStr(v interface{}) string {
+	rJSON, _ := json.MarshalIndent(v, "", "\t")
+	return string(rJSON)
+}
 
 func Setup() (*sql.DB, *gorm.DB, error) {
 	var dsnPostgre string
