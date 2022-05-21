@@ -41,7 +41,38 @@ func (d *BatchLoaderKey) Raw() interface{} {
 
 func NewDataSource(db *gorm.DB) *DataSource {
 	d := DataSource{DB: db}
-	d.BatchLoader = dataloader.NewBatchedLoader(d.batchLoader, dataloader.WithWait(100*time.Millisecond))
+	d.BatchLoader = dataloader.NewBatchedLoader(func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
+		results := make([]*dataloader.Result, len(keys))
+		keysLen := len(keys)
+		for i := 0; i < keysLen; i++ {
+			key := keys[i].(*BatchLoaderKey)
+			if !key.processed {
+				key.idx = i
+				gkeys := []*BatchLoaderKey{key}
+				if key.group != nil {
+					for j := i + 1; j < keysLen; j++ {
+						jkey := keys[j].(*BatchLoaderKey)
+						if !jkey.processed {
+							if *key.group == *jkey.group {
+								jkey.idx = j
+								jkey.processed = true
+								gkeys = append(gkeys, jkey)
+							}
+						}
+					}
+				}
+				result := key.queryFn(gkeys)
+				for _, g := range gkeys {
+					if g.queryFilterFn != nil {
+						results[g.idx] = g.queryFilterFn(g, result)
+					} else {
+						results[g.idx] = result
+					}
+				}
+			}
+		}
+		return results
+	}, dataloader.WithWait(100*time.Millisecond))
 	return &d
 }
 
@@ -252,17 +283,12 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 				if filter.AuthorName != nil {
 					tx.Distinct()
 					tx.Joins("JOIN book_authors ON books.id = book_authors.book_id LEFT JOIN authors ON authors.id = book_authors.author_id")
-					FilterText(filter.AuthorName, tx, `"authors".name`)
+					FilterText(filter.AuthorName, tx, `"authors"."name"`)
 				}
 				if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
 					tx.Distinct()
 					tx.Joins("JOIN reviews ON books.id = reviews.book_id")
-					if filter.Star.Min != nil {
-						tx.Where("reviews.star >= ?", filter.Star.Min)
-					}
-					if filter.Star.Max != nil {
-						tx.Where("reviews.star <= ?", filter.Star.Max)
-					}
+					FilterIntRange(filter.Star, tx, `"reviews"."star"`)
 				}
 			}
 			if offset != nil {
@@ -522,37 +548,4 @@ func (ds *DataSource) NewBatchLoaderKey(group *string, key string, params interf
 		queryFn:       queryFn,
 		queryFilterFn: queryFilterFn,
 	}, nil
-}
-
-func (ds *DataSource) batchLoader(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-	results := make([]*dataloader.Result, len(keys))
-	keysLen := len(keys)
-	for i := 0; i < keysLen; i++ {
-		key := keys[i].(*BatchLoaderKey)
-		if !key.processed {
-			key.idx = i
-			gkeys := []*BatchLoaderKey{key}
-			if key.group != nil {
-				for j := i + 1; j < keysLen; j++ {
-					jkey := keys[j].(*BatchLoaderKey)
-					if !jkey.processed {
-						if *key.group == *jkey.group {
-							jkey.idx = j
-							jkey.processed = true
-							gkeys = append(gkeys, jkey)
-						}
-					}
-				}
-			}
-			result := key.queryFn(gkeys)
-			for _, g := range gkeys {
-				if g.queryFilterFn != nil {
-					results[g.idx] = g.queryFilterFn(g, result)
-				} else {
-					results[g.idx] = result
-				}
-			}
-		}
-	}
-	return results
 }

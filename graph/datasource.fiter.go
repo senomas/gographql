@@ -15,3 +15,12 @@ func FilterText(filter *model.FilterText, tx *gorm.DB, field string) {
 		tx.Where(fmt.Sprintf("%s = ?", field), filter.Value)
 	}
 }
+
+func FilterIntRange(filter *model.FilterIntRange, tx *gorm.DB, field string) {
+	if filter.Min != nil {
+		tx.Where(fmt.Sprintf("%s >= ?", field), filter.Min)
+	}
+	if filter.Max != nil {
+		tx.Where(fmt.Sprintf("%s >= ?", field), filter.Max)
+	}
+}
