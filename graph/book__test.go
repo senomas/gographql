@@ -429,7 +429,7 @@ func TestTodo(t *testing.T) {
 		if mock != nil {
 			reviewArgs := NewArrayIntArgs(1, 2, 3, 4)
 			mock.ExpectQuery(QuoteMeta(`SELECT "books"."id","books"."title" FROM "books" LIMIT 10`)).WithArgs(NoArgs...).WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "Harry Potter and the Sorcerer's Stone").AddRow(2, "Harry Potter and the Chamber of Secrets").AddRow(3, "Harry Potter and the Book of Evil").AddRow(4, "Harry Potter and the Snake Dictionary"))
-			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3,$4) AND star >= $5`)).WithArgs(reviewArgs, reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill").AddRow(4, 1, 3, "The Man With Funny Hat"))
+			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3,$4) AND "reviews"."star" >= $5`)).WithArgs(reviewArgs, reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).AddRow(1, 1, 5, "The Boy Who Live").AddRow(2, 2, 5, "The Girl Who Kill").AddRow(4, 1, 3, "The Man With Funny Hat"))
 		}
 		defer func() {
 			if mock != nil {
