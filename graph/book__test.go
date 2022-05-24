@@ -25,7 +25,6 @@ func addContext(ds *graph.DataSource) client.Option {
 }
 
 func TestTodo(t *testing.T) {
-
 	cfg := generated.Config{Resolvers: &graph.Resolver{}}
 	cfg.Directives.Gorm = graph.Directive_Gorm
 	h := handler.NewDefaultServer(generated.NewExecutableSchema(cfg))
@@ -420,19 +419,19 @@ func TestTodo(t *testing.T) {
 		}
 		var resp respType
 		c.MustPost(`{
-		books {
-			count
-			list {
-				id
-				title
-				reviews {
-					id
-					star
-					text
-				}
-			}
-		}
-	}`, &resp, addContext(graph.NewDataSource(db)))
+	    	books {
+		    	count
+			    list {
+				    id
+    				title
+	    			reviews {
+		    			id
+			    		star
+				    	text
+    				}
+	    		}
+		    }
+    	}`, &resp, addContext(graph.NewDataSource(db)))
 
 		JsonMatch(t, &respType{
 			Books: model.BookList{
