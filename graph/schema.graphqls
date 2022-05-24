@@ -1,10 +1,9 @@
-# GraphQL schema example
-#
-# https://gqlgen.com/getting-started/
-
 enum FilterTextOp {
   LIKE
   EQ
+
+  NOT_LIKE
+  NOT_EQ
 }
 
 input FilterText {

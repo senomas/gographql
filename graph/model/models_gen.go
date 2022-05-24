@@ -88,18 +88,22 @@ type UpdateBook struct {
 type FilterTextOp string
 
 const (
-	FilterTextOpLike FilterTextOp = "LIKE"
-	FilterTextOpEq   FilterTextOp = "EQ"
+	FilterTextOpLike    FilterTextOp = "LIKE"
+	FilterTextOpEq      FilterTextOp = "EQ"
+	FilterTextOpNotLike FilterTextOp = "NOT_LIKE"
+	FilterTextOpNotEq   FilterTextOp = "NOT_EQ"
 )
 
 var AllFilterTextOp = []FilterTextOp{
 	FilterTextOpLike,
 	FilterTextOpEq,
+	FilterTextOpNotLike,
+	FilterTextOpNotEq,
 }
 
 func (e FilterTextOp) IsValid() bool {
 	switch e {
-	case FilterTextOpLike, FilterTextOpEq:
+	case FilterTextOpLike, FilterTextOpEq, FilterTextOpNotLike, FilterTextOpNotEq:
 		return true
 	}
 	return false

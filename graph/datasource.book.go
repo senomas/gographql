@@ -136,6 +136,7 @@ func (ds *DataSource) DeleteBook(ctx context.Context, id int) (*model.Book, erro
 	}
 	return nil, fmt.Errorf("RowsAffected %v", result.RowsAffected)
 }
+
 func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter *model.BookFilter) (*model.BookList, error) {
 	needCount := false
 	var fields []string
@@ -164,9 +165,10 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 					FilterText(filter.Title, tx, "books.title")
 				}
 				if filter.AuthorName != nil {
-					tx.Distinct()
-					tx.Joins("JOIN book_authors ON books.id = book_authors.book_id LEFT JOIN authors ON authors.id = book_authors.author_id")
-					FilterText(filter.AuthorName, tx, `"authors"."name"`)
+					sq := ds.DB.Select("book_id")
+					sq.Joins("JOIN book_authors ON authors.id = book_authors.author_id")
+					op := FilterSubQueryText(filter.AuthorName, sq, `authors.name`)
+					tx.Where(fmt.Sprintf("books.id %s (?)", op), sq.Model(&model.Author{}))
 				}
 				if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
 					tx.Distinct()

@@ -388,13 +388,12 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "graph/schema.graphqls", Input: `# GraphQL schema example
-#
-# https://gqlgen.com/getting-started/
-
-enum FilterTextOp {
+	{Name: "graph/schema.graphqls", Input: `enum FilterTextOp {
   LIKE
   EQ
+
+  NOT_LIKE
+  NOT_EQ
 }
 
 input FilterText {
