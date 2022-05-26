@@ -37,7 +37,6 @@ func FilterSubQueryText(filter *model.FilterText, tx *gorm.DB, field string) str
 	return op
 }
 
-
 func FilterIntRange(filter *model.FilterIntRange, tx *gorm.DB, field string) {
 	if filter.Min != nil {
 		tx.Where(fmt.Sprintf("%s >= ?", field), filter.Min)

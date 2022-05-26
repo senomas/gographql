@@ -59,7 +59,9 @@ func Setup() (*sql.DB, *gorm.DB, error) {
 	if db, err := gorm.Open(postgres.New(postgres.Config{DSN: dsnPostgre}), &gorm.Config{Logger: gormLogger}); err != nil {
 		return nil, nil, err
 	} else {
-		db.Migrator().DropTable(&model.Author{}, &model.Book{}, &model.Review{}, "book_authors")
+		if err := db.Migrator().DropTable(&model.Author{}, &model.Book{}, &model.Review{}, "book_authors"); err != nil {
+			return nil, nil, err
+		}
 		if err := db.AutoMigrate(&model.Author{}, &model.Book{}, &model.Review{}); err != nil {
 			return nil, nil, err
 		}
