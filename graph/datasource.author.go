@@ -6,6 +6,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/graph-gophers/dataloader"
+	"github.com/pkg/errors"
 	"github.com/senomas/gographql/graph/model"
 	"gorm.io/gorm"
 )
@@ -94,7 +95,7 @@ func (ds *DataSource) BookAuthors(ctx context.Context, obj *model.Book) ([]*mode
 	}
 	data, err := ds.BatchLoad(ctx, &group, key, []int{obj.ID}, obj, queryFn, filterFn)
 	if data != nil {
-		return data.([]*model.Author), err
+		return data.([]*model.Author), errors.Wrap(err, "BookAuthors failed")
 	}
-	return nil, err
+	return nil, errors.Wrap(err, "BookAuthors failed")
 }

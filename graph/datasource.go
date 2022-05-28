@@ -3,10 +3,11 @@ package graph
 import (
 	"context"
 	"fmt"
-	"time"
-
+   
 	"github.com/graph-gophers/dataloader"
+	"github.com/pkg/errors"
 	"gorm.io/gorm"
+	"time"
 )
 
 type ContextID string
@@ -91,7 +92,7 @@ func (ds *DataSource) Load(ctx context.Context, dest interface{}, fields []strin
 	result := ds.DB.Select(fields).Scopes(scopes...).Find(&dest)
 	if result.Error != nil {
 		return &dataloader.Result{
-			Error: result.Error,
+			Error: errors.Wrap(result.Error, "failed to load"),
 		}
 	}
 	return &dataloader.Result{

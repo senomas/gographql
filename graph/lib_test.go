@@ -119,12 +119,8 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 }
 
 func QuoteMeta(r string) string {
-	return "^" + regexp.QuoteMeta(
-    strings.ReplaceAll(
-      strings.ReplaceAll(
-        strings.Join(strings.Fields(r), " "),
-        "( ",
-        "("),
-      " )",
-      ")")) + "$"
+   r = strings.Join(strings.Fields(r), " ")
+   r = strings.ReplaceAll(r, "( ", "(")
+   r = strings.ReplaceAll(r, " )", ")")
+	return "^" + regexp.QuoteMeta(r) + "$"
 }
