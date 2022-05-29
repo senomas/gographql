@@ -475,12 +475,12 @@ func TestTodo(t *testing.T) {
 				AddRow(3, "Harry Potter and the Book of Evil").
 				AddRow(4, "Harry Potter and the Snake Dictionary"))
 			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3,$4)`)).
-            WithArgs(reviewArgs, reviewArgs, reviewArgs, reviewArgs).
-            WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).
-				AddRow(1, 1, 5, "The Boy Who Live").
-				AddRow(2, 2, 5, "The Girl Who Kill").
-				AddRow(3, 3, 1, "Fake Books").
-				AddRow(4, 1, 3, "The Man With Funny Hat"))
+				WithArgs(reviewArgs, reviewArgs, reviewArgs, reviewArgs).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).
+					AddRow(1, 1, 5, "The Boy Who Live").
+					AddRow(2, 2, 5, "The Girl Who Kill").
+					AddRow(3, 3, 1, "Fake Books").
+					AddRow(4, 1, 3, "The Man With Funny Hat"))
 		}
 		defer func() {
 			if mock != nil {
@@ -568,7 +568,7 @@ func TestTodo(t *testing.T) {
 				AddRow(3, "Harry Potter and the Book of Evil").
 				AddRow(4, "Harry Potter and the Snake Dictionary"))
 			mock.ExpectQuery(QuoteMeta(`SELECT "book_id","id","star","text" FROM "reviews" WHERE book_id IN ($1,$2,$3,$4) AND "reviews"."star" >= $5`)).
-            WithArgs(reviewArgs, reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).
+				WithArgs(reviewArgs, reviewArgs, reviewArgs, reviewArgs, 3).WillReturnRows(sqlmock.NewRows([]string{"id", "book_id", "star", "text"}).
 				AddRow(1, 1, 5, "The Boy Who Live").
 				AddRow(2, 2, 5, "The Girl Who Kill").
 				AddRow(4, 1, 3, "The Man With Funny Hat"))
@@ -889,8 +889,8 @@ func TestTodo(t *testing.T) {
 				AddRow(4, "Albus Dumbledore"))
 			mock.ExpectBegin()
 			mock.ExpectQuery(QuoteMeta(`INSERT INTO "books" ("title") VALUES ($1) RETURNING "id"`)).
-            WithArgs("Harry Potter and the Unknown").
-            WillReturnError(errors.New(`ERROR: duplicate key value violates unique constraint "books_title_key" (SQLSTATE 23505)`))
+				WithArgs("Harry Potter and the Unknown").
+				WillReturnError(errors.New(`ERROR: duplicate key value violates unique constraint "books_title_key" (SQLSTATE 23505)`))
 			mock.ExpectRollback()
 		}
 		defer func() {
@@ -1108,7 +1108,7 @@ func TestTodo(t *testing.T) {
 				AddRow(4, "Harry Potter and the Unknown"))
 			mock.ExpectBegin()
 			mock.ExpectExec(QuoteMeta(`UPDATE "books" SET "title"=$1 WHERE "id" = $2`)).WithArgs("Harry Potter and the Sorcerer's Stone", 4).
-            WillReturnError(errors.New(`ERROR: duplicate key value violates unique constraint "books_title_key" (SQLSTATE 23505)`))
+				WillReturnError(errors.New(`ERROR: duplicate key value violates unique constraint "books_title_key" (SQLSTATE 23505)`))
 			mock.ExpectRollback()
 		}
 		defer func() {
@@ -1145,7 +1145,7 @@ func TestTodo(t *testing.T) {
 	t.Run("update unknown book", func(t *testing.T) {
 		if mock != nil {
 			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE books.id = $1 LIMIT 1`)).WithArgs(999).
-            WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id", "Author__id", "Author__name"}))
+				WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id", "Author__id", "Author__name"}))
 		}
 		defer func() {
 			if mock != nil {
@@ -1315,7 +1315,7 @@ func TestTodo(t *testing.T) {
 	t.Run("delete unknown book", func(t *testing.T) {
 		if mock != nil {
 			mock.ExpectQuery(QuoteMeta(`SELECT * FROM "books" WHERE books.id = $1 LIMIT 1`)).WithArgs(999).
-            WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id", "Author__id", "Author__name"}))
+				WillReturnRows(sqlmock.NewRows([]string{"id", "title", "author_id", "Author__id", "Author__name"}))
 		}
 		defer func() {
 			if mock != nil {
