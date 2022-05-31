@@ -1,100 +1,119 @@
 enum FilterTextOp {
-  LIKE
-  EQ
+   LIKE
+   EQ
 
-  NOT_LIKE
-  NOT_EQ
+   NOT_LIKE
+   NOT_EQ
 }
 
 input FilterText {
-  op: FilterTextOp!
-  value: String!
+   op: FilterTextOp!
+   value: String!
 }
 
 input FilterIntRange {
-  min: Int
-  max: Int
+   min: Int
+   max: Int
 }
 
 type Author {
-  id: Int! @gorm(tag: "primaryKey")
-  name: String! @gorm(tag: "unique")
+   id: Int! @gorm(tag: "primaryKey")
+   name: String! @gorm(tag: "unique")
 }
 
 type AuthorList {
-  list: [Author!]!
-  count: Int!
+   list: [Author!]!
+   count: Int!
 }
 
 type Review {
-  id: Int! @gorm(tag: "primaryKey")
-  star: Int!
-  text: String!
-  book: Book! @gorm(ref: "BookID int")
+   id: Int! @gorm(tag: "primaryKey")
+   star: Int!
+   text: String!
+   book: Book! @gorm(ref: "BookID int")
+}
+
+type BookSeries {
+   id: Int! @gorm(tag: "primaryKey")
+   title: String! @gorm(tag: "unique")
+   books(offset: Int, limit: Int, filter: BookFilter): BookList! @gorm(tag: "-")
+}
+
+type BookSeriesList {
+   list: [BookSeries!]!
+   count: Int!
 }
 
 type Book {
-  id: Int! @gorm(tag: "primaryKey")
-  title: String! @gorm(tag: "unique")
-  authors: [Author!]
-    @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE")
-  reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
-    @gorm(tag: "constraint:OnDelete:CASCADE")
+   id: Int! @gorm(tag: "primaryKey")
+   title: String! @gorm(tag: "unique")
+   series: BookSeries @gorm(ref: "SeriesID *int")
+   authors: [Author!]
+      @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE")
+   reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
+      @gorm(tag: "constraint:OnDelete:CASCADE")
 }
 
 type BookList {
-  list: [Book!]!
-  count: Int!
+   list: [Book!]!
+   count: Int!
+}
+
+input BookSeriesFilter {
+   id: Int
+   title: FilterText
 }
 
 input AuthorFilter {
-  id: Int
-  name: FilterText
+   id: Int
+   name: FilterText
 }
 
 input BookFilter {
-  id: Int
-  title: FilterText
-  author_name: FilterText
-  star: FilterIntRange
+   id: Int
+   title: FilterText
+   author_name: FilterText
+   star: FilterIntRange
 }
 
 input ReviewFilter {
-  star: FilterIntRange
+   star: FilterIntRange
 }
 
 type Query {
-  authors(offset: Int = 0, limit: Int = 10, filter: AuthorFilter): AuthorList!
-  books(offset: Int = 0, limit: Int = 10, filter: BookFilter): BookList!
+   bookSeries(offset: Int = 0, limit: Int = 10, filter: BookSeriesFilter): BookSeriesList!
+   authors(offset: Int = 0, limit: Int = 10, filter: AuthorFilter): AuthorList!
+   books(offset: Int = 0, limit: Int = 10, filter: BookFilter): BookList!
 }
 
 input NewAuthor {
-  name: String!
+   name: String!
 }
 
 input NewBook {
-  title: String!
-  authors_name: [String!]!
+   title: String!
+   series_title: String
+   authors_name: [String!]!
 }
 
 input UpdateBook {
-  id: Int!
-  title: String
-  authors_name: [String!]
+   id: Int!
+   title: String
+   authors_name: [String!]
 }
 
 input NewReview {
-  book_id: Int!
-  star: Int!
-  text: String!
+   book_id: Int!
+   star: Int!
+   text: String!
 }
 
 type Mutation {
-  createAuthor(input: NewAuthor!): Author!
+   createAuthor(input: NewAuthor!): Author!
 
-  createBook(input: NewBook!): Book!
-  updateBook(input: UpdateBook!): Book!
-  deleteBook(id: Int!): Book!
+   createBook(input: NewBook!): Book!
+   updateBook(input: UpdateBook!): Book!
+   deleteBook(id: Int!): Book!
 
-  createReview(input: NewReview!): Review!
+   createReview(input: NewReview!): Review!
 }

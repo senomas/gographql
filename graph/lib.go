@@ -59,10 +59,10 @@ func Setup() (*sql.DB, *gorm.DB, error) {
 	if db, err := gorm.Open(postgres.New(postgres.Config{DSN: dsnPostgre}), &gorm.Config{Logger: gormLogger}); err != nil {
 		return nil, nil, err
 	} else {
-		if err := db.Migrator().DropTable(&model.Author{}, &model.Book{}, &model.Review{}, "book_authors"); err != nil {
+		if err := db.Migrator().DropTable(&model.Author{}, &model.BookSeries{}, &model.Book{}, &model.Review{}, "book_authors"); err != nil {
 			return nil, nil, err
 		}
-		if err := db.AutoMigrate(&model.Author{}, &model.Book{}, &model.Review{}); err != nil {
+		if err := db.AutoMigrate(&model.Author{}, &model.BookSeries{}, &model.Book{}, &model.Review{}); err != nil {
 			return nil, nil, err
 		}
 
@@ -109,8 +109,17 @@ func Populate(db *gorm.DB) error {
 		return result.Error
 	}
 
+   var bookSeries = model.BookSeries{
+      Title: "Harry Potter",
+   }
+   if result := tx.Create(&bookSeries); result.Error != nil {
+      return result.Error
+   }
+
+
 	var book = model.Book{
 		Title:   "Harry Potter and the Sorcerer's Stone",
+      Series: &bookSeries,
 		Authors: []*model.Author{&jkRowling},
 	}
 	if result := tx.Create(&book); result.Error != nil {
@@ -118,6 +127,7 @@ func Populate(db *gorm.DB) error {
 	}
 	book = model.Book{
 		Title:   "Harry Potter and the Chamber of Secrets",
+      Series: &bookSeries,
 		Authors: []*model.Author{&jkRowling},
 	}
 	if result := tx.Create(&book); result.Error != nil {

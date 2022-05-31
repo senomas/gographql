@@ -24,10 +24,12 @@ type AuthorList struct {
 }
 
 type Book struct {
-	ID      int       `json:"id" gorm:"primaryKey"`
-	Title   string    `json:"title" gorm:"unique"`
-	Authors []*Author `json:"authors" gorm:"many2many:book_authors;constraint:OnDelete:CASCADE"`
-	Reviews []*Review `json:"reviews" gorm:"constraint:OnDelete:CASCADE"`
+	ID       int         `json:"id" gorm:"primaryKey"`
+	Title    string      `json:"title" gorm:"unique"`
+	Series   *BookSeries `json:"series"`
+	SeriesID *int        `json:"-"`
+	Authors  []*Author   `json:"authors" gorm:"many2many:book_authors;constraint:OnDelete:CASCADE"`
+	Reviews  []*Review   `json:"reviews" gorm:"constraint:OnDelete:CASCADE"`
 }
 
 type BookFilter struct {
@@ -40,6 +42,22 @@ type BookFilter struct {
 type BookList struct {
 	List  []*Book `json:"list"`
 	Count int     `json:"count"`
+}
+
+type BookSeries struct {
+	ID    int       `json:"id" gorm:"primaryKey"`
+	Title string    `json:"title" gorm:"unique"`
+	Books *BookList `json:"books" gorm:"-"`
+}
+
+type BookSeriesFilter struct {
+	ID    *int        `json:"id"`
+	Title *FilterText `json:"title"`
+}
+
+type BookSeriesList struct {
+	List  []*BookSeries `json:"list"`
+	Count int           `json:"count"`
 }
 
 type FilterIntRange struct {
@@ -58,6 +76,7 @@ type NewAuthor struct {
 
 type NewBook struct {
 	Title       string   `json:"title"`
+	SeriesTitle *string  `json:"series_title"`
 	AuthorsName []string `json:"authors_name"`
 }
 

@@ -89,10 +89,10 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 		if db, err := gorm.Open(postgres.New(postgres.Config{DSN: *dsnPostgre}), &gorm.Config{Logger: gormLogger}); err != nil {
 			return nil, nil, nil, err
 		} else {
-			if err := db.Migrator().DropTable(&model.Author{}, &model.Book{}, &model.Review{}, "book_authors"); err != nil {
+			if err := db.Migrator().DropTable(&model.BookSeries{}, &model.Author{}, &model.Book{}, &model.Review{}, "book_authors"); err != nil {
 				return nil, nil, nil, err
 			}
-			if err := db.AutoMigrate(&model.Author{}, &model.Book{}, &model.Review{}); err != nil {
+			if err := db.AutoMigrate(&model.BookSeries{}, &model.Author{}, &model.Book{}, &model.Review{}); err != nil {
 				return nil, nil, nil, err
 			}
 
@@ -119,8 +119,8 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 }
 
 func QuoteMeta(r string) string {
-   r = strings.Join(strings.Fields(r), " ")
-   r = strings.ReplaceAll(r, "( ", "(")
-   r = strings.ReplaceAll(r, " )", ")")
+	r = strings.Join(strings.Fields(r), " ")
+	r = strings.ReplaceAll(r, "( ", "(")
+	r = strings.ReplaceAll(r, " )", ")")
 	return "^" + regexp.QuoteMeta(r) + "$"
 }

@@ -193,7 +193,93 @@ func (ds *DataSource) Books(ctx context.Context, offset *int, limit *int, filter
 		var count int64
 		var result *gorm.DB
 		if needCount {
-			result = ds.DB.Scopes(scopeFn(nil, nil)).Table("books").Count(&count)
+			result = ds.DB.Scopes(scopeFn(nil, nil)).Count(&count)
+			if result.Error != nil {
+				return &dataloader.Result{
+					Error: result.Error,
+				}
+			}
+			if count == 0 {
+				return &dataloader.Result{
+					Data: &model.BookList{List: []*model.Book{}, Count: int(count)},
+				}
+			}
+		}
+		result = ds.DB.Select(fields).Scopes(scopeFn(offset, limit)).Find(&books)
+		if result.Error != nil {
+			return &dataloader.Result{
+				Error: result.Error,
+			}
+		}
+		return &dataloader.Result{
+			Data: &model.BookList{List: books, Count: int(count)},
+		}
+	}
+	data, err := ds.BatchLoad(ctx, &group, key, nil, nil, queryFn, nil)
+	if data != nil {
+		return data.(*model.BookList), err
+	}
+	return nil, err
+}
+
+func (ds *DataSource) BooksSeriesBooks(ctx context.Context, obj *model.BookSeries, offset *int, limit *int, filter *model.BookFilter) (*model.BookList, error) {
+	needCount := false
+	var fields []string
+	for _, f := range graphql.CollectFieldsCtx(ctx, nil) {
+		switch f.Name {
+		case "count":
+			needCount = true
+		case "list":
+			for _, f := range graphql.CollectFields(graphql.GetOperationContext(ctx), f.SelectionSet, nil) {
+				switch f.Name {
+				case "authors", "reviews":
+				default:
+					fields = append(fields, fmt.Sprintf(`"books"."%s"`, f.Name))
+				}
+			}
+		}
+	}
+	var scopeFn = func(offset *int, limit *int) func(tx *gorm.DB) *gorm.DB {
+		return func(tx *gorm.DB) *gorm.DB {
+			tx.Model(&model.Book{})
+         tx.Where("books.series_id = ?", obj.ID)
+			if filter != nil {
+				if filter.ID != nil {
+					tx.Where("books.id = ?", filter.ID)
+				}
+				if filter.Title != nil {
+					FilterText(filter.Title, tx, "books.title")
+				}
+				if filter.AuthorName != nil {
+					sq := ds.DB.Select("book_id")
+					sq.Joins("JOIN book_authors ON authors.id = book_authors.author_id")
+					op := FilterSubQueryText(filter.AuthorName, sq, `authors.name`)
+					tx.Where(fmt.Sprintf("books.id %s (?)", op), sq.Model(&model.Author{}))
+				}
+				if filter.Star != nil && (filter.Star.Min != nil || filter.Star.Max != nil) {
+					tx.Distinct()
+					tx.Joins("JOIN reviews ON books.id = reviews.book_id")
+					FilterIntRange(filter.Star, tx, `"reviews"."star"`)
+				}
+			}
+			if offset != nil {
+				tx.Offset(*offset)
+			}
+			if limit != nil {
+				tx.Limit(*limit)
+			}
+			return tx
+		}
+	}
+	tx := ds.DB.Session(&gorm.Session{DryRun: true}).Select(fields).Scopes(scopeFn(offset, limit)).Find(&model.Book{})
+	group := tx.Statement.SQL.String()
+	key := ds.DB.Dialector.Explain(tx.Statement.SQL.String(), tx.Statement.Vars...)
+	var queryFn = func(keys []*BatchLoaderKey) *dataloader.Result {
+		var books []*model.Book
+		var count int64
+		var result *gorm.DB
+		if needCount {
+			result = ds.DB.Scopes(scopeFn(nil, nil)).Count(&count)
 			if result.Error != nil {
 				return &dataloader.Result{
 					Error: result.Error,
