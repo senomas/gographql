@@ -1,6 +1,7 @@
 package graph_test
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -11,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/99designs/gqlgen/client"
+	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/senomas/gographql/graph"
-	"github.com/senomas/gographql/graph/model"
+	"github.com/senomas/gographql/graph/generated"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -22,11 +25,24 @@ import (
 
 var NoArgs = []driver.Value{}
 
-func JsonMatch(t *testing.T, expected interface{}, resp interface{}) {
+type GraphqlError struct {
+	Message    string
+	Path       []string
+	Extensions map[string]interface{}
+}
+
+func addContext(ds *graph.DataSource) client.Option {
+	return func(bd *client.Request) {
+		ctx := context.WithValue(context.TODO(), graph.Context_DataSource, ds)
+		bd.HTTP = bd.HTTP.WithContext(ctx)
+	}
+}
+
+func JsonMatch(t *testing.T, expected interface{}, resp interface{}, msg ...string) {
 	rJSON, _ := json.MarshalIndent(resp, "", "\t")
 	eJSON, _ := json.MarshalIndent(expected, "", "\t")
 
-	assert.Equal(t, string(eJSON), string(rJSON))
+	assert.Equal(t, string(eJSON), string(rJSON), msg)
 }
 
 type ArrayIntArgs struct {
@@ -54,6 +70,13 @@ func (m *ArrayIntArgs) Match(v driver.Value) bool {
 	return false
 }
 
+func SetupTest() (generated.Config, *handler.Server, *client.Client) {
+	cfg := generated.Config{Resolvers: &graph.Resolver{}}
+	h := handler.NewDefaultServer(generated.NewExecutableSchema(cfg))
+	c := client.New(h)
+	return cfg, h, c
+}
+
 func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 	var dsnPostgre *string
 	var gormLogger logger.Interface
@@ -68,7 +91,7 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 					SlowThreshold:             time.Second,
 					LogLevel:                  logger.Info,
 					IgnoreRecordNotFoundError: true,
-					Colorful:                  true,
+					Colorful:                  false,
 				},
 			)
 		}
@@ -80,7 +103,7 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 				SlowThreshold:             time.Second,
 				LogLevel:                  logger.Silent,
 				IgnoreRecordNotFoundError: true,
-				Colorful:                  true,
+				Colorful:                  false,
 			},
 		)
 	}
@@ -89,16 +112,15 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 		if db, err := gorm.Open(postgres.New(postgres.Config{DSN: *dsnPostgre}), &gorm.Config{Logger: gormLogger}); err != nil {
 			return nil, nil, nil, err
 		} else {
-			if err := db.Migrator().DropTable(&model.BookSeries{}, &model.Author{}, &model.Book{}, &model.Review{}, "book_authors"); err != nil {
-				return nil, nil, nil, err
-			}
-			if err := db.AutoMigrate(&model.BookSeries{}, &model.Author{}, &model.Book{}, &model.Review{}); err != nil {
+			if err := graph.Migrate(db); err != nil {
 				return nil, nil, nil, err
 			}
 
-			if err := graph.Populate(db); err != nil {
+			tx := db.Begin()
+			if err := Populate(tx); err != nil {
 				return nil, nil, nil, err
 			}
+			tx.Commit()
 
 			if sqlDB, err := db.DB(); err != nil {
 				return nil, nil, nil, err
@@ -116,6 +138,10 @@ func Setup() (*sql.DB, *gorm.DB, sqlmock.Sqlmock, error) {
 			return sqlDB, db, mock, nil
 		}
 	}
+}
+
+func Populate(tx *gorm.DB) error {
+	return graph.Populate(tx)
 }
 
 func QuoteMeta(r string) string {

@@ -1,3 +1,11 @@
+scalar Time
+directive @goField(
+	forceResolver: Boolean
+	name: String
+) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+directive @gorm(tag: String, ref: String, refTag: String) on FIELD_DEFINITION
+directive @hasRole(role: String!) on FIELD_DEFINITION
+
 enum FilterTextOp {
    LIKE
    EQ
@@ -30,13 +38,13 @@ type Review {
    id: Int! @gorm(tag: "primaryKey")
    star: Int!
    text: String!
-   book: Book! @gorm(ref: "BookID int")
+   book: Book! @gorm(ref: "BookID int") @goField(forceResolver: true) 
 }
 
 type BookSeries {
    id: Int! @gorm(tag: "primaryKey")
    title: String! @gorm(tag: "unique")
-   books(offset: Int, limit: Int, filter: BookFilter): BookList! @gorm(tag: "-")
+   books(offset: Int, limit: Int, filter: BookFilter): BookList! @gorm(tag: "-") @goField(forceResolver: true) 
 }
 
 type BookSeriesList {
@@ -49,9 +57,9 @@ type Book {
    title: String! @gorm(tag: "unique")
    series: BookSeries @gorm(ref: "SeriesID *int")
    authors: [Author!]
-      @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE")
+      @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE") @goField(forceResolver: true)
    reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
-      @gorm(tag: "constraint:OnDelete:CASCADE")
+      @gorm(tag: "constraint:OnDelete:CASCADE") @goField(forceResolver: true) 
 }
 
 type BookList {

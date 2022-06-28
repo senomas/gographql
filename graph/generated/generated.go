@@ -44,7 +44,7 @@ type ResolverRoot interface {
 }
 
 type DirectiveRoot struct {
-	Gorm func(ctx context.Context, obj interface{}, next graphql.Resolver, tag *string, ref *string) (res interface{}, err error)
+	HasRole func(ctx context.Context, obj interface{}, next graphql.Resolver, role string) (res interface{}, err error)
 }
 
 type ComplexityRoot struct {
@@ -466,7 +466,15 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "graph/schema.graphqls", Input: `enum FilterTextOp {
+	{Name: "../schema.graphqls", Input: `scalar Time
+directive @goField(
+	forceResolver: Boolean
+	name: String
+) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+directive @gorm(tag: String, ref: String, refTag: String) on FIELD_DEFINITION
+directive @hasRole(role: String!) on FIELD_DEFINITION
+
+enum FilterTextOp {
    LIKE
    EQ
 
@@ -498,13 +506,13 @@ type Review {
    id: Int! @gorm(tag: "primaryKey")
    star: Int!
    text: String!
-   book: Book! @gorm(ref: "BookID int")
+   book: Book! @gorm(ref: "BookID int") @goField(forceResolver: true) 
 }
 
 type BookSeries {
    id: Int! @gorm(tag: "primaryKey")
    title: String! @gorm(tag: "unique")
-   books(offset: Int, limit: Int, filter: BookFilter): BookList! @gorm(tag: "-")
+   books(offset: Int, limit: Int, filter: BookFilter): BookList! @gorm(tag: "-") @goField(forceResolver: true) 
 }
 
 type BookSeriesList {
@@ -517,9 +525,9 @@ type Book {
    title: String! @gorm(tag: "unique")
    series: BookSeries @gorm(ref: "SeriesID *int")
    authors: [Author!]
-      @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE")
+      @gorm(tag: "many2many:book_authors;constraint:OnDelete:CASCADE") @goField(forceResolver: true)
    reviews(offset: Int, limit: Int, filter: ReviewFilter): [Review!]!
-      @gorm(tag: "constraint:OnDelete:CASCADE")
+      @gorm(tag: "constraint:OnDelete:CASCADE") @goField(forceResolver: true) 
 }
 
 type BookList {
@@ -586,16 +594,6 @@ type Mutation {
    createReview(input: NewReview!): Review!
 }
 `, BuiltIn: false},
-	{Name: "plugin/directives.graphql", Input: `
-			directive @goField(
-				forceResolver: Boolean
-				name: String
-			) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
-
-			directive @gorm(tag: String, ref: String) on FIELD_DEFINITION
-
-			scalar Time
-		`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -603,27 +601,18 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
-func (ec *executionContext) dir_gorm_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) dir_hasRole_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 *string
-	if tmp, ok := rawArgs["tag"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tag"))
-		arg0, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+	var arg0 string
+	if tmp, ok := rawArgs["role"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["tag"] = arg0
-	var arg1 *string
-	if tmp, ok := rawArgs["ref"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ref"))
-		arg1, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["ref"] = arg1
+	args["role"] = arg0
 	return args, nil
 }
 
@@ -933,32 +922,8 @@ func (ec *executionContext) _Author_id(ctx context.Context, field graphql.Collec
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.ID, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "primaryKey")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(int); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be int`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1001,32 +966,8 @@ func (ec *executionContext) _Author_name(ctx context.Context, field graphql.Coll
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.Name, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "unique")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(string); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be string`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1163,32 +1104,8 @@ func (ec *executionContext) _Book_id(ctx context.Context, field graphql.Collecte
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.ID, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "primaryKey")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(int); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be int`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1231,32 +1148,8 @@ func (ec *executionContext) _Book_title(ctx context.Context, field graphql.Colle
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.Title, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "unique")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(string); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be string`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.Title, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1299,32 +1192,8 @@ func (ec *executionContext) _Book_series(ctx context.Context, field graphql.Coll
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.Series, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			ref, err := ec.unmarshalOString2ᚖstring(ctx, "SeriesID *int")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, nil, ref)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.BookSeries); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/senomas/gographql/graph/model.BookSeries`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.Series, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1372,32 +1241,8 @@ func (ec *executionContext) _Book_authors(ctx context.Context, field graphql.Col
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Book().Authors(rctx, obj)
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "many2many:book_authors;constraint:OnDelete:CASCADE")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*model.Author); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/senomas/gographql/graph/model.Author`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Book().Authors(rctx, obj)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1443,32 +1288,8 @@ func (ec *executionContext) _Book_reviews(ctx context.Context, field graphql.Col
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.ReviewFilter))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "constraint:OnDelete:CASCADE")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*model.Review); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/senomas/gographql/graph/model.Review`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Book().Reviews(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.ReviewFilter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1632,32 +1453,8 @@ func (ec *executionContext) _BookSeries_id(ctx context.Context, field graphql.Co
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.ID, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "primaryKey")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(int); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be int`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1700,32 +1497,8 @@ func (ec *executionContext) _BookSeries_title(ctx context.Context, field graphql
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.Title, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "unique")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(string); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be string`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.Title, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1768,32 +1541,8 @@ func (ec *executionContext) _BookSeries_books(ctx context.Context, field graphql
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.BookSeries().Books(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.BookFilter))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "-")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.BookList); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/senomas/gographql/graph/model.BookList`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.BookSeries().Books(rctx, obj, fc.Args["offset"].(*int), fc.Args["limit"].(*int), fc.Args["filter"].(*model.BookFilter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2588,32 +2337,8 @@ func (ec *executionContext) _Review_id(ctx context.Context, field graphql.Collec
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return obj.ID, nil
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			tag, err := ec.unmarshalOString2ᚖstring(ctx, "primaryKey")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, tag, nil)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(int); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be int`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2744,32 +2469,8 @@ func (ec *executionContext) _Review_book(ctx context.Context, field graphql.Coll
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Review().Book(rctx, obj)
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			ref, err := ec.unmarshalOString2ᚖstring(ctx, "BookID int")
-			if err != nil {
-				return nil, err
-			}
-			if ec.directives.Gorm == nil {
-				return nil, errors.New("directive gorm is not implemented")
-			}
-			return ec.directives.Gorm(ctx, obj, directive0, nil, ref)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.Book); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/senomas/gographql/graph/model.Book`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Review().Book(rctx, obj)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
